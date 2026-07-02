@@ -8,8 +8,10 @@ import {
   registerProfessional as apiRegisterProfessional,
   uploadDocument as apiUploadDocument,
   getPendingVerifications, approveVerification, rejectVerification,
+  getNearbyProfessionals, createServiceRequest, updateJobStatus, submitReview,
+  uploadJobPhoto,
 } from "@/lib/api";
-import type { PendingVerification } from "@/lib/types";
+import type { PendingVerification, ProUser as ApiProUser } from "@/lib/types";
 import {
   MapPin, Shield, Star, CheckCircle, ChevronDown, Menu, X,
   Zap, Droplets, Wind, Wrench, Paintbrush, MoreHorizontal,
@@ -117,7 +119,10 @@ interface Professional {
 }
 
 interface Message { id: string; from: "client" | "pro"; text: string; time: string }
-interface ServiceRequest { service: string; description: string; address: string }
+interface ServiceRequest {
+  service: string; description: string; address: string;
+  id?: string; professionalId?: string; agreedPrice?: number; completionPhotoUrl?: string;
+}
 
 type JobStatus = "idle" | "searching" | "matched" | "en_camino" | "en_sitio" | "completado";
 type Screen =
@@ -150,6 +155,19 @@ const SERVICES = [
 // (dato viejo/mock), lo devuelve tal cual.
 function specialtyLabel(value: string): string {
   return SERVICES.find(s => s.id === value)?.label ?? value;
+}
+
+// Convierte un profesional real (de getNearbyProfessionals) a la forma que
+// espera la UI del marketplace. distance/eta quedan como valores fijos —
+// el cálculo real por GPS todavía está pendiente (ver notas del proyecto).
+const PRO_COLORS = ["#3B82F6", "#8B5CF6", "#F59E0B", "#EF4444", "#06B6D4", "#EC4899"];
+function proUserToProfessional(u: ApiProUser, index: number): Professional {
+  return {
+    id: u.id, name: u.name, specialty: specialtyLabel(u.specialty), rating: u.rating,
+    reviews: u.reviewCount, distance: 1.2, eta: 15,
+    initials: u.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase(),
+    color: PRO_COLORS[index % PRO_COLORS.length], verified: true, jobs: u.completedJobs, bio: u.bio,
+  };
 }
 
 function nowStr() {
@@ -1235,16 +1253,38 @@ function ClientServices({ user, onSelect, onProfile, onBack }: { user: ClientUse
 function ClientMap({ service, onRequest, onBack }: { service: string; onRequest: (pro: Professional) => void; onBack: () => void }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showProfile, setShowProfile] = useState(false);
-  const selectedPro = PROFESSIONALS.find(p => p.id === selectedId);
+  const [professionals, setProfessionals] = useState<Professional[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const selectedPro = professionals.find(p => p.id === selectedId);
+
+  useEffect(() => {
+    if (config.MOCK_MODE) { setProfessionals(PROFESSIONALS); setLoading(false); return; }
+    const categoryId = SERVICES.find(s => s.label === service)?.id;
+    setLoading(true);
+    setLoadError("");
+    getNearbyProfessionals({ location: { lat: -17.785, lng: -63.181 }, category: categoryId as any })
+      .then(pros => setProfessionals(pros.map((p, i) => proUserToProfessional(p, i))))
+      .catch((err: any) => setLoadError(err?.message || "No se pudieron cargar los profesionales."))
+      .finally(() => setLoading(false));
+  }, [service]);
+
   return (
     <ScreenWrap>
       <AppHeader title={service} onBack={onBack} />
       <div className="flex-1 overflow-y-auto">
-        <div className="p-4"><MapView selectedProId={selectedId ?? undefined} onSelectPro={id => { setSelectedId(id); setShowProfile(true); }} /></div>
+        <div className="p-4"><MapView /></div>
         <div className="px-4 pb-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">{PROFESSIONALS.length} profesionales disponibles cerca</p>
+          {loading && <p className="text-sm text-slate-400 text-center py-8">Buscando profesionales cerca...</p>}
+          {!loading && loadError && <p className="text-sm text-red-500 text-center py-8">{loadError}</p>}
+          {!loading && !loadError && professionals.length === 0 && (
+            <p className="text-sm text-slate-400 text-center py-8">Todavía no hay profesionales verificados en esta categoría.</p>
+          )}
+          {!loading && professionals.length > 0 && (
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">{professionals.length} profesionales disponibles cerca</p>
+          )}
           <div className="flex flex-col gap-3">
-            {PROFESSIONALS.map(pro => (
+            {professionals.map(pro => (
               <div key={pro.id} onClick={() => { setSelectedId(pro.id); setShowProfile(true); }}
                 className="bg-white rounded-2xl border p-4 cursor-pointer hover:shadow-md transition-all"
                 style={{ borderColor: selectedId === pro.id ? LIME : "#E5E7EB", outline: selectedId === pro.id ? `2px solid ${LIME}` : "none" }}>
@@ -1296,6 +1336,30 @@ function ClientMap({ service, onRequest, onBack }: { service: string; onRequest:
 function ClientRequest({ service, pro, onSubmit, onBack }: { service: string; pro: Professional; onSubmit: (req: ServiceRequest) => void; onBack: () => void }) {
   const [desc, setDesc] = useState(""); const [addr, setAddr] = useState("Calle Los Pinos #342, Equipetrol");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!desc) return;
+    setError("");
+    setLoading(true);
+    try {
+      if (config.MOCK_MODE) {
+        await new Promise(r => setTimeout(r, 800));
+        onSubmit({ service, description: desc, address: addr, professionalId: pro.id });
+        return;
+      }
+      const categoryId = (SERVICES.find(s => s.label === service)?.id ?? "otro") as any;
+      const real = await createServiceRequest({
+        professionalId: pro.id, category: categoryId, description: desc,
+        address: { street: addr, zone: "", city: "Santa Cruz de la Sierra", lat: -17.785, lng: -63.181 },
+      });
+      onSubmit({ id: real.id, service, description: desc, address: addr, professionalId: pro.id });
+    } catch (err: any) {
+      setError(err?.message || "No se pudo enviar la solicitud. Intenta de nuevo.");
+    } finally {
+      setLoading(false);
+    }
+  };
   return (
     <ScreenWrap>
       <AppHeader title="Detalles del servicio" onBack={onBack} />
@@ -1309,7 +1373,7 @@ function ClientRequest({ service, pro, onSubmit, onBack }: { service: string; pr
             </div>
           </div>
         </Card>
-        <form onSubmit={e => { e.preventDefault(); if (!desc) return; setLoading(true); setTimeout(() => onSubmit({ service, description: desc, address: addr }), 800); }} className="flex flex-col gap-5">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: NAVY }}>Descripción del trabajo</label>
             <textarea placeholder="Describe qué necesitas. Ej: 'El tomacorriente del cuarto ya no funciona...'" value={desc} onChange={e => setDesc(e.target.value)} rows={4} className="w-full px-4 py-3 rounded-xl border text-sm outline-none bg-white resize-none" style={{ borderColor: "#E5E7EB", color: NAVY }} required />
@@ -1321,6 +1385,11 @@ function ClientRequest({ service, pro, onSubmit, onBack }: { service: string; pr
           <div className="p-4 rounded-xl border" style={{ background: "#FFFBEB", borderColor: "#FDE68A" }}>
             <div className="flex items-start gap-2"><MessageSquare className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" /><p className="text-xs text-amber-700 leading-relaxed">El precio se coordina directamente entre tú y el profesional a través del chat.</p></div>
           </div>
+          {error && (
+            <p className="text-xs font-medium flex items-center gap-1.5" style={{ color: "#EF4444" }}>
+              <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />{error}
+            </p>
+          )}
           <LimeBtn type="submit" disabled={loading || !desc} className="w-full py-4 text-base">
             {loading ? <><Loader2 className="w-4 h-4 animate-spin" />Enviando...</> : <>Confirmar solicitud <Send className="w-4 h-4" /></>}
           </LimeBtn>
@@ -1442,10 +1511,82 @@ function ClientTracking({ pro, request, jobStatus, messages, onSendMessage, onCo
   );
 }
 
+// ─── CLIENT PRECIO PAGADO ─────────────────────────────────────────────────────
+function ClientPricePaid({ pro, requestId, onDone }: { pro: Professional; requestId?: string; onDone: (price?: number) => void }) {
+  const [price, setPrice] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const handleConfirm = async () => {
+    const amount = parseFloat(price);
+    if (!amount || amount <= 0) { setError("Ingresa un monto válido."); return; }
+    setError("");
+    setLoading(true);
+    try {
+      if (!config.MOCK_MODE && requestId) {
+        await updateJobStatus(requestId, "completed", amount);
+      } else {
+        await new Promise(r => setTimeout(r, 600));
+      }
+      onDone(amount);
+    } catch (err: any) {
+      setError(err?.message || "No se pudo guardar el monto. Intenta de nuevo.");
+    } finally {
+      setLoading(false);
+    }
+  };
+  return (
+    <ScreenWrap>
+      <AppHeader title="Precio pagado" />
+      <div className="flex-1 flex flex-col items-center justify-center p-6">
+        <div className="w-full max-w-sm">
+          <div className="text-center mb-8">
+            <ProAvatar pro={pro} size="lg" />
+            <h2 className="text-2xl font-black mt-4 mb-1" style={{ color: NAVY }}>¿Cuánto pagaste?</h2>
+            <p className="text-slate-500 text-sm">Este dato queda registrado para {pro.name.split(" ")[0]} y para cualquier reclamo futuro.</p>
+          </div>
+          <div className="mb-6">
+            <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: NAVY }}>Monto pagado (Bs.)</label>
+            <div className="relative">
+              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input type="number" min="0" step="0.01" value={price} onChange={e => { setPrice(e.target.value); setError(""); }} placeholder="Ej. 150" className="w-full pl-9 pr-4 py-3 rounded-xl border text-sm outline-none bg-white" style={{ borderColor: "#E5E7EB", color: NAVY }} />
+            </div>
+          </div>
+          {error && (
+            <p className="text-xs font-medium flex items-center gap-1.5 mb-4" style={{ color: "#EF4444" }}>
+              <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />{error}
+            </p>
+          )}
+          <LimeBtn onClick={handleConfirm} disabled={loading} className="w-full py-4 text-base">
+            {loading ? <><Loader2 className="w-4 h-4 animate-spin" />Guardando...</> : <>Confirmar y calificar <ArrowRight className="w-4 h-4" /></>}
+          </LimeBtn>
+          <button onClick={() => onDone()} className="w-full mt-3 text-sm text-slate-400 hover:text-slate-600 transition-colors">Omitir por ahora</button>
+        </div>
+      </div>
+    </ScreenWrap>
+  );
+}
+
 // ─── CLIENT RATE ──────────────────────────────────────────────────────────────
-function ClientRate({ pro, onSubmit }: { pro: Professional; onSubmit: (rating: number, comment: string) => void }) {
+function ClientRate({ pro, requestId, onSubmit }: { pro: Professional; requestId?: string; onSubmit: (rating: number, comment: string) => void }) {
   const [rating, setRating] = useState(0); const [hovered, setHovered] = useState(0); const [comment, setComment] = useState(""); const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const labels = ["", "Malo", "Regular", "Bueno", "Muy bueno", "Excelente"];
+  const handleSubmit = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      if (!config.MOCK_MODE && requestId) {
+        await submitReview({ requestId, rating, comment: comment || undefined });
+      } else {
+        await new Promise(r => setTimeout(r, 800));
+      }
+      onSubmit(rating, comment);
+    } catch (err: any) {
+      setError(err?.message || "No se pudo enviar la calificación. Intenta de nuevo.");
+    } finally {
+      setLoading(false);
+    }
+  };
   return (
     <ScreenWrap>
       <AppHeader title="Calificar servicio" />
@@ -1464,7 +1605,12 @@ function ClientRate({ pro, onSubmit }: { pro: Professional; onSubmit: (rating: n
             <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: NAVY }}>Comentario (opcional)</label>
             <textarea value={comment} onChange={e => setComment(e.target.value)} placeholder="Cuéntanos cómo fue tu experiencia..." rows={3} className="w-full px-4 py-3 rounded-xl border text-sm outline-none bg-white resize-none" style={{ borderColor: "#E5E7EB", color: NAVY }} />
           </div>
-          <LimeBtn onClick={() => { setLoading(true); setTimeout(() => onSubmit(rating, comment), 800); }} disabled={!rating || loading} className="w-full py-4 text-base">
+          {error && (
+            <p className="text-xs font-medium flex items-center gap-1.5 mb-3" style={{ color: "#EF4444" }}>
+              <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />{error}
+            </p>
+          )}
+          <LimeBtn onClick={handleSubmit} disabled={!rating || loading} className="w-full py-4 text-base">
             {loading ? <><Loader2 className="w-4 h-4 animate-spin" />Enviando...</> : <>Enviar calificación <ThumbsUp className="w-4 h-4" /></>}
           </LimeBtn>
           <button onClick={() => onSubmit(0, "")} className="w-full mt-3 text-sm text-slate-400 hover:text-slate-600 transition-colors">Omitir por ahora</button>
@@ -2045,13 +2191,16 @@ function ProRequestDetail({ request, onAccept, onReject, onBack }: { request: Se
 }
 
 // ─── PRO ACTIVE JOB ───────────────────────────────────────────────────────────
-function ProActiveJob({ request, jobStatus, messages, onStatusChange, onSendMessage, onComplete, onBack }: {
+function ProActiveJob({ request, jobStatus, messages, onStatusChange, onSendMessage, onFinish, onBack }: {
   request: ServiceRequest; jobStatus: JobStatus; messages: Message[];
   onStatusChange: (s: JobStatus) => void; onSendMessage: (text: string) => void;
-  onComplete: () => void; onBack: () => void;
+  onFinish: (photoFile: File) => Promise<void>; onBack: () => void;
 }) {
   const [tab, setTab] = useState<"job" | "chat">("job");
   const [msg, setMsg] = useState("");
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [finishing, setFinishing] = useState(false);
+  const [finishError, setFinishError] = useState("");
   const chatRef = useRef<HTMLDivElement>(null);
   useEffect(() => { chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: "smooth" }); }, [messages]);
   const steps = [
@@ -2101,7 +2250,30 @@ function ProActiveJob({ request, jobStatus, messages, onStatusChange, onSendMess
               })}
             </div>
             {jobStatus === "completado" && (
-              <LimeBtn onClick={onComplete} className="w-full py-4 text-base">Finalizar y ver resumen <Award className="w-4 h-4" /></LimeBtn>
+              <div className="flex flex-col gap-3">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: NAVY }}>Foto del trabajo terminado <span style={{ color: "#EF4444" }}>*</span></label>
+                  <label className={`flex items-center gap-3 px-4 py-3.5 rounded-xl border-2 border-dashed cursor-pointer transition-colors ${photoFile ? "border-lime-400 bg-lime-50" : "border-slate-200 hover:border-slate-300 bg-white"}`}>
+                    {photoFile ? <><CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" /><span className="text-sm font-medium text-green-700 flex-1 truncate">{photoFile.name}</span><span className="text-xs text-green-600">Listo</span></>
+                      : <><Upload className="w-5 h-5 text-slate-400 flex-shrink-0" /><span className="text-sm text-slate-400">Toca para subir una foto</span></>}
+                    <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) setPhotoFile(f); }} />
+                  </label>
+                </div>
+                {finishError && (
+                  <p className="text-xs font-medium flex items-center gap-1.5" style={{ color: "#EF4444" }}>
+                    <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />{finishError}
+                  </p>
+                )}
+                <LimeBtn onClick={async () => {
+                  if (!photoFile) return;
+                  setFinishError(""); setFinishing(true);
+                  try { await onFinish(photoFile); }
+                  catch (err: any) { setFinishError(err?.message || "No se pudo finalizar el trabajo. Intenta de nuevo."); }
+                  finally { setFinishing(false); }
+                }} disabled={!photoFile || finishing} className="w-full py-4 text-base">
+                  {finishing ? <><Loader2 className="w-4 h-4 animate-spin" />Finalizando...</> : <>Finalizar y ver resumen <Award className="w-4 h-4" /></>}
+                </LimeBtn>
+              </div>
             )}
           </div>
         ) : (
@@ -2505,7 +2677,7 @@ function LandingPage() {
 }
 
 // ─── PAGE: Cliente portal (/cliente) ─────────────────────────────────────────
-type CS = "auth" | "profile" | "services" | "map" | "request" | "searching" | "tracking" | "rate" | "done";
+type CS = "auth" | "profile" | "services" | "map" | "request" | "searching" | "tracking" | "price" | "rate" | "done";
 
 function ClientePortal() {
   const navigate = useNavigate();
@@ -2537,8 +2709,9 @@ function ClientePortal() {
   if (screen === "map") return <ClientMap service={selectedService} onRequest={p => { setSelectedPro(p); setScreen("request"); }} onBack={() => setScreen("services")} />;
   if (screen === "request") return <ClientRequest service={selectedService} pro={selectedPro!} onSubmit={req => { setActiveRequest(req); setJobStatus("searching"); setScreen("searching"); }} onBack={() => setScreen("map")} />;
   if (screen === "searching") return <ClientSearching pro={selectedPro!} onMatched={handleMatched} />;
-  if (screen === "tracking") return <ClientTracking pro={selectedPro!} request={activeRequest!} jobStatus={jobStatus} messages={messages} onSendMessage={handleClientMsg} onComplete={() => setScreen("rate")} onBack={() => setScreen("services")} />;
-  if (screen === "rate") return <ClientRate pro={selectedPro!} onSubmit={r => { setClientRating(r); setScreen("done"); }} />;
+  if (screen === "tracking") return <ClientTracking pro={selectedPro!} request={activeRequest!} jobStatus={jobStatus} messages={messages} onSendMessage={handleClientMsg} onComplete={() => setScreen("price")} onBack={() => setScreen("services")} />;
+  if (screen === "price") return <ClientPricePaid pro={selectedPro!} requestId={activeRequest?.id} onDone={price => { setActiveRequest(activeRequest ? { ...activeRequest, agreedPrice: price } : activeRequest); setScreen("rate"); }} />;
+  if (screen === "rate") return <ClientRate pro={selectedPro!} requestId={activeRequest?.id} onSubmit={r => { setClientRating(r); setScreen("done"); }} />;
   if (screen === "done") return <ClientDone pro={selectedPro!} rating={clientRating ?? 0} onAgain={() => { reset(); setScreen("services"); }} onHome={() => { reset(); navigate("/"); }} />;
   return null;
 }
@@ -2562,6 +2735,16 @@ function ProfesionalPortal() {
     setJobStatus("en_camino");
     setScreen("job");
     setTimeout(() => addMessage("pro", `Hola, soy ${proUser?.name}. Acabo de aceptar tu solicitud. En 12 minutos estoy contigo.`), 500);
+    if (!config.MOCK_MODE && activeRequest?.id) {
+      updateJobStatus(activeRequest.id, "en_camino").catch(() => {});
+    }
+  };
+  const handleProReject = () => {
+    if (!config.MOCK_MODE && activeRequest?.id) {
+      updateJobStatus(activeRequest.id, "cancelled").catch(() => {});
+    }
+    resetMarketplace();
+    setScreen("dashboard");
   };
   const handleProStatus = (status: JobStatus) => {
     setJobStatus(status);
@@ -2571,6 +2754,16 @@ function ProfesionalPortal() {
       completado: "¡Listo! El trabajo ha sido completado. Fue un placer trabajar contigo.",
     };
     if (msgs[status]) setTimeout(() => addMessage("pro", msgs[status]), 300);
+    if (!config.MOCK_MODE && activeRequest?.id && (status === "en_camino" || status === "en_sitio")) {
+      updateJobStatus(activeRequest.id, status).catch(() => {});
+    }
+  };
+  const handleJobFinish = async (photoFile: File) => {
+    if (!config.MOCK_MODE && activeRequest?.id) {
+      await uploadJobPhoto(activeRequest.id, photoFile);
+      await updateJobStatus(activeRequest.id, "completed");
+    }
+    setScreen("done");
   };
   // Los documentos ya quedaron guardados en Supabase durante la subida (ver
   // ProDocuments/handleFile); acá solo se conserva una copia local para la
@@ -2598,8 +2791,8 @@ function ProfesionalPortal() {
   if (screen === "verify") return <ProVerify user={proUser!} onOpenAdmin={() => navigate("/admin")} />;
   if (screen === "dashboard") return <ProDashboard user={proUser!} jobStatus={jobStatus} activeRequest={activeRequest} onViewRequest={() => setScreen(jobStatus === "searching" ? "request" : "job")} onProfile={() => setScreen("profile")} onDocuments={() => setScreen("docview")} onLogout={() => { setProUser(null); navigate("/"); }} onSimulateRequest={simulateRequest} />;
   if (screen === "profile") return <ProProfile user={proUser!} onSave={u => { setProUser(u); setScreen("dashboard"); }} onDocuments={() => setScreen("docview")} onBack={() => setScreen("dashboard")} />;
-  if (screen === "request") return <ProRequestDetail request={activeRequest ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} onAccept={handleProAccept} onReject={() => { resetMarketplace(); setScreen("dashboard"); }} onBack={() => setScreen("dashboard")} />;
-  if (screen === "job") return <ProActiveJob request={activeRequest ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} jobStatus={jobStatus} messages={messages} onStatusChange={handleProStatus} onSendMessage={handleProMsg} onComplete={() => setScreen("done")} onBack={() => setScreen("dashboard")} />;
+  if (screen === "request") return <ProRequestDetail request={activeRequest ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} onAccept={handleProAccept} onReject={handleProReject} onBack={() => setScreen("dashboard")} />;
+  if (screen === "job") return <ProActiveJob request={activeRequest ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} jobStatus={jobStatus} messages={messages} onStatusChange={handleProStatus} onSendMessage={handleProMsg} onFinish={handleJobFinish} onBack={() => setScreen("dashboard")} />;
   if (screen === "done") return <ProJobDone clientRating={clientRating} onHome={() => { resetMarketplace(); setScreen("dashboard"); }} />;
   return null;
 }

@@ -238,6 +238,26 @@ export async function uploadDocument(
   return { url: signed.signedUrl };
 }
 
+// ─── Foto de trabajo terminado ────────────────────────────────────────────────
+
+export async function uploadJobPhoto(requestId: string, file: File): Promise<{ url: string }> {
+  if (config.MOCK_MODE) {
+    await delay(1200);
+    return { url: `https://storage.magiver.com/jobs/${requestId}/${file.name}` };
+  }
+  const path = `${requestId}/${Date.now()}_${file.name}`;
+  const { error: uploadError } = await supabase.storage.from("job-photos").upload(path, file, { upsert: true });
+  if (uploadError) throw { code: "storage_error", message: uploadError.message };
+
+  const { data: signed, error: signedError } = await supabase.storage.from("job-photos").createSignedUrl(path, 60 * 60 * 24 * 365);
+  if (signedError) throw { code: "storage_error", message: signedError.message };
+
+  const { error: updateError } = await supabase.from("service_requests").update({ completion_photo_url: signed.signedUrl }).eq("id", requestId);
+  if (updateError) throw { code: "db_error", message: updateError.message };
+
+  return { url: signed.signedUrl };
+}
+
 // ─── Admin ────────────────────────────────────────────────────────────────────
 
 export async function getAdminStats(): Promise<AdminStats> {
