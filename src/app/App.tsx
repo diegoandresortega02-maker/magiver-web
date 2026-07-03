@@ -1977,7 +1977,7 @@ function ProDashboard({ user, jobStatus, activeRequest, onViewRequest, onProfile
   onLogout: () => void; onSimulateRequest: () => void;
 }) {
   const [available, setAvailable] = useState(true);
-  const hasIncoming = jobStatus === "searching" && activeRequest;
+  const hasIncoming = (jobStatus === "searching" || jobStatus === "matched") && activeRequest;
   const hasActiveJob = jobStatus === "en_camino" || jobStatus === "en_sitio";
   const recentJobs = [
     { name: "María López", service: "Instalación tomacorriente", date: "Hoy, 09:15", rating: 5 },
@@ -2789,7 +2789,7 @@ function ProfesionalPortal() {
   if (screen === "documents") return <ProDocuments user={proUser!} onSubmit={handleDocSubmit} onBack={() => setScreen("register")} />;
   if (screen === "docview") return <ProDocuments user={proUser!} onSubmit={() => {}} onBack={() => setScreen("profile")} viewOnly docs={proDocuments ?? undefined} />;
   if (screen === "verify") return <ProVerify user={proUser!} onOpenAdmin={() => navigate("/admin")} />;
-  if (screen === "dashboard") return <ProDashboard user={proUser!} jobStatus={jobStatus} activeRequest={activeRequest} onViewRequest={() => setScreen(jobStatus === "searching" ? "request" : "job")} onProfile={() => setScreen("profile")} onDocuments={() => setScreen("docview")} onLogout={() => { setProUser(null); navigate("/"); }} onSimulateRequest={simulateRequest} />;
+  if (screen === "dashboard") return <ProDashboard user={proUser!} jobStatus={jobStatus} activeRequest={activeRequest} onViewRequest={() => setScreen((jobStatus === "searching" || jobStatus === "matched") ? "request" : "job")} onProfile={() => setScreen("profile")} onDocuments={() => setScreen("docview")} onLogout={() => { setProUser(null); navigate("/"); }} onSimulateRequest={simulateRequest} />;
   if (screen === "profile") return <ProProfile user={proUser!} onSave={u => { setProUser(u); setScreen("dashboard"); }} onDocuments={() => setScreen("docview")} onBack={() => setScreen("dashboard")} />;
   if (screen === "request") return <ProRequestDetail request={activeRequest ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} onAccept={handleProAccept} onReject={handleProReject} onBack={() => setScreen("dashboard")} />;
   if (screen === "job") return <ProActiveJob request={activeRequest ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} jobStatus={jobStatus} messages={messages} onStatusChange={handleProStatus} onSendMessage={handleProMsg} onFinish={handleJobFinish} onBack={() => setScreen("dashboard")} />;
