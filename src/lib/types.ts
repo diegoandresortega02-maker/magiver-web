@@ -32,6 +32,7 @@ export interface ProUser extends BaseUser {
   completedJobs: number;
   location?: GeoPoint;
   isOnline: boolean;
+  rejectionReason?: string;
 }
 
 export interface AdminUser extends BaseUser {

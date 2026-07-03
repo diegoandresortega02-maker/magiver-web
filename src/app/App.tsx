@@ -9,9 +9,9 @@ import {
   uploadDocument as apiUploadDocument,
   getPendingVerifications, approveVerification, rejectVerification,
   getNearbyProfessionals, createServiceRequest, updateJobStatus, submitReview,
-  uploadJobPhoto,
+  uploadJobPhoto, getActiveProfessionals, getRejectedProfessionals, getAdminStats,
 } from "@/lib/api";
-import type { PendingVerification, ProUser as ApiProUser } from "@/lib/types";
+import type { PendingVerification, ProUser as ApiProUser, AdminStats } from "@/lib/types";
 import {
   MapPin, Shield, Star, CheckCircle, ChevronDown, Menu, X,
   Zap, Droplets, Wind, Wrench, Paintbrush, MoreHorizontal,
@@ -2371,23 +2371,21 @@ function AdminAuth({ onLogin, onBack }: { onLogin: () => void; onBack: () => voi
 }
 
 // ─── ADMIN DASHBOARD ──────────────────────────────────────────────────────────
-function AdminDashboard({ pendingList, loadingPending, onReview, onLogout }: {
-  pendingList: PendingVerification[]; loadingPending: boolean; onReview: (rec: PendingVerification) => void; onLogout: () => void;
+function AdminDashboard({ pendingList, loadingPending, activeList, loadingActive, rejectedList, loadingRejected, adminStats, onReview, onLogout }: {
+  pendingList: PendingVerification[]; loadingPending: boolean;
+  activeList: ApiProUser[]; loadingActive: boolean;
+  rejectedList: ApiProUser[]; loadingRejected: boolean;
+  adminStats: AdminStats | null;
+  onReview: (rec: PendingVerification) => void; onLogout: () => void;
 }) {
   const [tab, setTab] = useState<"pending" | "active" | "rejected">("pending");
-  const activeMock = [
-    { name: "Carlos Rojas", specialty: "Electricista", ci: "5678901 SC", approvedAt: "20/06/2025", jobs: 134, rating: 4.9 },
-    { name: "Ana Mendoza", specialty: "Plomera", ci: "4321098 LP", approvedAt: "18/06/2025", jobs: 89, rating: 4.8 },
-    { name: "Roberto Vaca", specialty: "Pintor", ci: "7654321 CB", approvedAt: "15/06/2025", jobs: 67, rating: 4.7 },
-  ];
-  const rejectedMock = [{ name: "Pedro Alandia", specialty: "Albañil", ci: "1234567 SC", rejectedAt: "22/06/2025", reason: "Documentos ilegibles" }];
   const stats = [
     { label: "Pendientes", value: pendingList.length, color: "#F59E0B" },
-    { label: "Activos", value: activeMock.length, color: "#16A34A" },
-    { label: "Rechazados", value: rejectedMock.length, color: "#EF4444" },
-    { label: "Clientes", value: 248, color: "#3B82F6" },
-    { label: "Servicios hoy", value: 31, color: "#8B5CF6" },
-    { label: "Total completados", value: 1432, color: "#06B6D4" },
+    { label: "Activos", value: activeList.length, color: "#16A34A" },
+    { label: "Rechazados", value: rejectedList.length, color: "#EF4444" },
+    { label: "Clientes", value: adminStats?.totalClients ?? "—", color: "#3B82F6" },
+    { label: "Servicios hoy", value: adminStats?.requestsToday ?? "—", color: "#8B5CF6" },
+    { label: "Total completados", value: adminStats?.requestsTotal ?? "—", color: "#06B6D4" },
   ];
   return (
     <ScreenWrap>
@@ -2446,41 +2444,53 @@ function AdminDashboard({ pendingList, loadingPending, onReview, onLogout }: {
           )
         )}
         {tab === "active" && (
-          <div className="flex flex-col gap-3">
-            {activeMock.map(pro => (
-              <Card key={pro.name}>
-                <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-full flex items-center justify-center font-bold text-sm text-white" style={{ background: "#3B82F6" }}>{pro.name.split(" ").map(n => n[0]).join("").slice(0, 2)}</div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-1.5"><p className="font-bold text-sm" style={{ color: NAVY }}>{pro.name}</p><BadgeCheck className="w-4 h-4 text-blue-500" /></div>
-                    <p className="text-xs text-slate-500">{pro.specialty} · CI: {pro.ci}</p>
-                    <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">
-                      <span>{pro.jobs} trabajos</span>
-                      <span className="flex items-center gap-0.5"><Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />{pro.rating}</span>
-                      <span>Aprobado: {pro.approvedAt}</span>
+          loadingActive ? (
+            <div className="text-center py-12 text-slate-400"><Loader2 className="w-8 h-8 mx-auto mb-3 animate-spin" /><p className="text-sm">Cargando profesionales...</p></div>
+          ) : activeList.length === 0 ? (
+            <div className="text-center py-12 text-slate-400"><Users className="w-12 h-12 mx-auto mb-3 text-slate-300" /><p className="font-semibold">Sin profesionales activos</p></div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {activeList.map(pro => (
+                <Card key={pro.id}>
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-full flex items-center justify-center font-bold text-sm text-white" style={{ background: "#3B82F6" }}>{pro.name.split(" ").map(n => n[0]).join("").slice(0, 2)}</div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-1.5"><p className="font-bold text-sm" style={{ color: NAVY }}>{pro.name}</p><BadgeCheck className="w-4 h-4 text-blue-500" /></div>
+                      <p className="text-xs text-slate-500">{specialtyLabel(pro.specialty)} · CI: {pro.ci}</p>
+                      <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">
+                        <span>{pro.completedJobs} trabajos</span>
+                        <span className="flex items-center gap-0.5"><Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />{pro.rating.toFixed(1)}</span>
+                        <span>Registrado: {new Date(pro.createdAt).toLocaleDateString("es-BO")}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </Card>
-            ))}
-          </div>
+                </Card>
+              ))}
+            </div>
+          )
         )}
         {tab === "rejected" && (
-          <div className="flex flex-col gap-3">
-            {rejectedMock.map(pro => (
-              <Card key={pro.name}>
-                <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-full flex items-center justify-center font-bold text-sm text-white" style={{ background: "#EF4444" }}>{pro.name.split(" ").map(n => n[0]).join("").slice(0, 2)}</div>
-                  <div className="flex-1">
-                    <p className="font-bold text-sm" style={{ color: NAVY }}>{pro.name}</p>
-                    <p className="text-xs text-slate-500">{pro.specialty} · CI: {pro.ci}</p>
-                    <p className="text-xs text-red-500 mt-0.5">Rechazado: {pro.rejectedAt} — {pro.reason}</p>
+          loadingRejected ? (
+            <div className="text-center py-12 text-slate-400"><Loader2 className="w-8 h-8 mx-auto mb-3 animate-spin" /><p className="text-sm">Cargando profesionales...</p></div>
+          ) : rejectedList.length === 0 ? (
+            <div className="text-center py-12 text-slate-400"><CheckCircle className="w-12 h-12 mx-auto mb-3 text-slate-300" /><p className="font-semibold">Sin solicitudes rechazadas</p></div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {rejectedList.map(pro => (
+                <Card key={pro.id}>
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-full flex items-center justify-center font-bold text-sm text-white" style={{ background: "#EF4444" }}>{pro.name.split(" ").map(n => n[0]).join("").slice(0, 2)}</div>
+                    <div className="flex-1">
+                      <p className="font-bold text-sm" style={{ color: NAVY }}>{pro.name}</p>
+                      <p className="text-xs text-slate-500">{specialtyLabel(pro.specialty)} · CI: {pro.ci}</p>
+                      <p className="text-xs text-red-500 mt-0.5">{pro.rejectionReason || "Sin motivo registrado"}</p>
+                    </div>
+                    <VerifBadge status="rejected" />
                   </div>
-                  <VerifBadge status="rejected" />
-                </div>
-              </Card>
-            ))}
-          </div>
+                </Card>
+              ))}
+            </div>
+          )
         )}
       </div>
     </ScreenWrap>
@@ -2807,24 +2817,34 @@ function AdminPortal() {
   const [reviewingRecord, setReviewingRecord] = useState<PendingVerification | null>(null);
   const [pendingList, setPendingList] = useState<PendingVerification[]>([]);
   const [loadingPending, setLoadingPending] = useState(false);
+  const [activeList, setActiveList] = useState<ApiProUser[]>([]);
+  const [loadingActive, setLoadingActive] = useState(false);
+  const [rejectedList, setRejectedList] = useState<ApiProUser[]>([]);
+  const [loadingRejected, setLoadingRejected] = useState(false);
+  const [adminStats, setAdminStats] = useState<AdminStats | null>(null);
 
-  const refreshPending = async () => {
+  const refreshDashboard = async () => {
     if (config.MOCK_MODE) return;
-    setLoadingPending(true);
+    setLoadingPending(true); setLoadingActive(true); setLoadingRejected(true);
     try {
-      const res = await getPendingVerifications();
-      setPendingList(res.data);
+      const [pending, active, rejected, stats] = await Promise.all([
+        getPendingVerifications(), getActiveProfessionals(), getRejectedProfessionals(), getAdminStats(),
+      ]);
+      setPendingList(pending.data);
+      setActiveList(active);
+      setRejectedList(rejected);
+      setAdminStats(stats);
     } catch {
-      setPendingList([]);
+      setPendingList([]); setActiveList([]); setRejectedList([]);
     } finally {
-      setLoadingPending(false);
+      setLoadingPending(false); setLoadingActive(false); setLoadingRejected(false);
     }
   };
 
-  useEffect(() => { if (screen === "dashboard") refreshPending(); }, [screen]);
+  useEffect(() => { if (screen === "dashboard") refreshDashboard(); }, [screen]);
 
   if (screen === "auth") return <AdminAuth onLogin={() => setScreen("dashboard")} onBack={() => navigate("/")} />;
-  if (screen === "dashboard") return <AdminDashboard pendingList={pendingList} loadingPending={loadingPending} onReview={rec => { setReviewingRecord(rec); setScreen("review"); }} onLogout={() => navigate("/")} />;
+  if (screen === "dashboard") return <AdminDashboard pendingList={pendingList} loadingPending={loadingPending} activeList={activeList} loadingActive={loadingActive} rejectedList={rejectedList} loadingRejected={loadingRejected} adminStats={adminStats} onReview={rec => { setReviewingRecord(rec); setScreen("review"); }} onLogout={() => navigate("/")} />;
   if (screen === "review") return <AdminProReview record={reviewingRecord!} onDone={() => setScreen("dashboard")} onBack={() => setScreen("dashboard")} />;
   return null;
 }

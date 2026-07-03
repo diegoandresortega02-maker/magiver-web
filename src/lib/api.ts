@@ -29,7 +29,22 @@ function rowToProUser(row: any, email = ""): ProUser {
     completedJobs: row.completed_jobs, isOnline: row.is_online,
     location: row.location_lat != null ? { lat: row.location_lat, lng: row.location_lng } : undefined,
     createdAt: row.created_at,
+    rejectionReason: row.rejection_reason ?? undefined,
   };
+}
+
+export async function getActiveProfessionals(): Promise<ProUser[]> {
+  if (config.MOCK_MODE) { await delay(400); return MOCK_PROFESSIONALS; }
+  const { data, error } = await supabase.from("professionals").select("*").eq("status", "active").order("rating", { ascending: false });
+  if (error) throw { code: "db_error", message: error.message };
+  return (data ?? []).map(row => rowToProUser(row));
+}
+
+export async function getRejectedProfessionals(): Promise<ProUser[]> {
+  if (config.MOCK_MODE) { await delay(400); return []; }
+  const { data, error } = await supabase.from("professionals").select("*").eq("status", "rejected").order("created_at", { ascending: false });
+  if (error) throw { code: "db_error", message: error.message };
+  return (data ?? []).map(row => rowToProUser(row));
 }
 
 export async function getNearbyProfessionals(filter: NearbyProFilter): Promise<ProUser[]> {
