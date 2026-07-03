@@ -1,0 +1,72 @@
+MAGIVER — Encargo de 7 imágenes para el sitio web
+
+Estilo compartido para las 7 (agregar al final de cada prompt):
+"Fotografía realista, luz natural cálida, colores tierra y verde lima sutil, estilo editorial profesional, sin texto ni marcas de agua, alta resolución."
+
+============================================================
+1) HERO — fondo de la sección principal
+Tamaño: 1920 x 1080 px (16:9)
+------------------------------------------------------------
+Electricista boliviano de unos 35 años revisando un tablero eléctrico en el
+interior de una casa moderna, expresión concentrada, herramientas de
+electricista en la mano, luz natural de ventana lateral, fondo de living
+residencial ligeramente desenfocado, encuadre horizontal amplio con espacio
+vacío a la izquierda para superponer texto.
+Fotografía realista, luz natural cálida, colores tierra y verde lima sutil,
+estilo editorial profesional, sin texto ni marcas de agua, alta resolución.
+
+============================================================
+2) SECCIÓN "PARA PROFESIONALES" — alguien acepta una solicitud
+Tamaño: 1200 x 900 px (4:3)
+------------------------------------------------------------
+Albañil boliviano sonriendo mientras mira la pantalla de su celular al aire
+libre, en una obra en construcción de día, gesto de satisfacción como si
+acabara de aceptar un trabajo nuevo, casco de seguridad puesto, fondo de
+obra en construcción en Santa Cruz de la Sierra.
+Fotografía realista, luz natural cálida, colores tierra y verde lima sutil,
+estilo editorial profesional, sin texto ni marcas de agua, alta resolución.
+
+============================================================
+3) TARJETA DE CATEGORÍA — Electricista
+Tamaño: 800 x 600 px (4:3)
+------------------------------------------------------------
+Primer plano de manos revisando cables con un multímetro sobre un tablero
+eléctrico abierto, ambiente interior.
+Fotografía realista, luz natural cálida, colores tierra y verde lima sutil,
+estilo editorial profesional, sin texto ni marcas de agua, alta resolución.
+
+============================================================
+4) TARJETA DE CATEGORÍA — Plomero
+Tamaño: 800 x 600 px (4:3)
+------------------------------------------------------------
+Plomero boliviano reparando una cañería debajo de un lavamanos, herramientas
+de plomería visibles, ambiente de baño residencial.
+Fotografía realista, luz natural cálida, colores tierra y verde lima sutil,
+estilo editorial profesional, sin texto ni marcas de agua, alta resolución.
+
+============================================================
+5) TARJETA DE CATEGORÍA — Aire acondicionado
+Tamaño: 800 x 600 px (4:3)
+------------------------------------------------------------
+Técnico instalando o limpiando un equipo de aire acondicionado tipo split
+montado en una pared, escalera o herramientas visibles.
+Fotografía realista, luz natural cálida, colores tierra y verde lima sutil,
+estilo editorial profesional, sin texto ni marcas de agua, alta resolución.
+
+============================================================
+6) TARJETA DE CATEGORÍA — Albañil
+Tamaño: 800 x 600 px (4:3)
+------------------------------------------------------------
+Albañil colocando ladrillos o aplicando revoque en una pared en
+construcción, guantes de trabajo, luz de día.
+Fotografía realista, luz natural cálida, colores tierra y verde lima sutil,
+estilo editorial profesional, sin texto ni marcas de agua, alta resolución.
+
+============================================================
+7) TARJETA DE CATEGORÍA — Pintor
+Tamaño: 800 x 600 px (4:3)
+------------------------------------------------------------
+Pintor aplicando pintura con rodillo sobre una pared de interior, lona
+protectora en el piso, ambiente luminoso.
+Fotografía realista, luz natural cálida, colores tierra y verde lima sutil,
+estilo editorial profesional, sin texto ni marcas de agua, alta resolución.

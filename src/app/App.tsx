@@ -1,6 +1,13 @@
 import { useState, useEffect, useRef, createContext, useContext } from "react";
 import { createBrowserRouter, RouterProvider, Outlet, useNavigate } from "react-router";
 import isotipo from "@/imports/isotipo_azul_verde_para_redes_-_verde_oficial.png";
+import heroPhoto from "@/assets/photos/hero-electricista.jpg";
+import prosPhoto from "@/assets/photos/pros-cliente-plomero.jpg";
+import catElectricista from "@/assets/photos/cat-electricista.jpg";
+import catPlomero from "@/assets/photos/cat-plomero.jpg";
+import catAire from "@/assets/photos/cat-aire-acondicionado.jpg";
+import catAlbanil from "@/assets/photos/cat-albanil.jpg";
+import catPintor from "@/assets/photos/cat-pintor.jpg";
 import { config } from "@/lib/config";
 import { realtime } from "@/lib/realtime";
 import { loginClient, registerClient, loginPro, loginAdmin } from "@/lib/auth";
@@ -629,7 +636,10 @@ function LandingHeader({ onClient, onPro, onAdmin }: { onClient: () => void; onP
 function LandingHero({ onClient, onPro, onAdmin }: { onClient: () => void; onPro: () => void; onAdmin: () => void }) {
   const scrollToContact = () => document.querySelector("#contacto")?.scrollIntoView({ behavior: "smooth" });
   return (
-    <section className="pt-16 min-h-screen flex items-center" style={{ background: NAVY }}>
+    <section
+      className="pt-16 min-h-screen flex items-center bg-cover bg-center"
+      style={{ backgroundImage: `linear-gradient(rgba(15,23,42,0.88), rgba(15,23,42,0.94)), url(${heroPhoto})` }}
+    >
       {/* Cambio 3: padding inferior extra para separar del siguiente bloque */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-28 w-full">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
@@ -711,12 +721,12 @@ function LandingHero({ onClient, onPro, onAdmin }: { onClient: () => void; onPro
 
 function LandingServices({ onClient }: { onClient: () => void }) {
   const cats = [
-    { icon: Zap, title: "Electricista", desc: "Instalaciones, reparaciones y mantenimiento eléctrico." },
-    { icon: Droplets, title: "Plomero", desc: "Tuberías, filtraciones e instalación sanitaria." },
-    { icon: Wind, title: "Aire acondicionado", desc: "Instalación, limpieza y reparación de equipos." },
-    { icon: Wrench, title: "Albañil", desc: "Construcción, remodelación y trabajos civiles." },
-    { icon: Paintbrush, title: "Pintor", desc: "Pintura interior, exterior y decorativa." },
-    { icon: MoreHorizontal, title: "Otros servicios", desc: "Carpintería, cerrajería, jardinería y más." },
+    { icon: Zap, title: "Electricista", desc: "Instalaciones, reparaciones y mantenimiento eléctrico.", photo: catElectricista },
+    { icon: Droplets, title: "Plomero", desc: "Tuberías, filtraciones e instalación sanitaria.", photo: catPlomero },
+    { icon: Wind, title: "Aire acondicionado", desc: "Instalación, limpieza y reparación de equipos.", photo: catAire },
+    { icon: Wrench, title: "Albañil", desc: "Construcción, remodelación y trabajos civiles.", photo: catAlbanil },
+    { icon: Paintbrush, title: "Pintor", desc: "Pintura interior, exterior y decorativa.", photo: catPintor },
+    { icon: MoreHorizontal, title: "Otros servicios", desc: "Carpintería, cerrajería, jardinería y más.", photo: undefined },
   ];
   return (
     <section id="servicios" className="py-24" style={{ background: LIGHT }}>
@@ -730,11 +740,18 @@ function LandingServices({ onClient }: { onClient: () => void }) {
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-12">
           {cats.map(c => (
-            <div key={c.title} onClick={onClient} className="bg-white rounded-2xl p-6 border cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all" style={{ borderColor: "#E5E7EB" }}>
-              <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-4" style={{ background: "#F0FDF4" }}><c.icon className="w-6 h-6" style={{ color: "#16A34A" }} /></div>
-              <h3 className="font-bold text-lg mb-1.5" style={{ color: NAVY }}>{c.title}</h3>
-              <p className="text-slate-500 text-sm leading-relaxed mb-3">{c.desc}</p>
-              <div className="flex items-center gap-1 text-xs font-semibold" style={{ color: "#16A34A" }}>Ver profesionales <ArrowRight className="w-3 h-3" /></div>
+            <div key={c.title} onClick={onClient} className="bg-white rounded-2xl overflow-hidden border cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all" style={{ borderColor: "#E5E7EB" }}>
+              {c.photo && (
+                <div className="h-36 overflow-hidden">
+                  <img src={c.photo} alt={c.title} className="w-full h-full object-cover" />
+                </div>
+              )}
+              <div className="p-6">
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-4" style={{ background: "#F0FDF4" }}><c.icon className="w-6 h-6" style={{ color: "#16A34A" }} /></div>
+                <h3 className="font-bold text-lg mb-1.5" style={{ color: NAVY }}>{c.title}</h3>
+                <p className="text-slate-500 text-sm leading-relaxed mb-3">{c.desc}</p>
+                <div className="flex items-center gap-1 text-xs font-semibold" style={{ color: "#16A34A" }}>Ver profesionales <ArrowRight className="w-3 h-3" /></div>
+              </div>
             </div>
           ))}
         </div>
@@ -804,7 +821,12 @@ function LandingPros({ onPro }: { onPro: () => void }) {
             Únete a la red de profesionales verificados de MAGIVER y accede a clientes que ya están buscando tu servicio cerca de ti, sin intermediarios y sin cuotas.
           </p>
         </div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-10">
+        <div className="grid lg:grid-cols-2 gap-8 items-center mb-10">
+          <div className="relative rounded-3xl overflow-hidden aspect-[4/3]">
+            <img src={prosPhoto} alt="Cliente satisfecho supervisando el trabajo de un plomero de MAGIVER" className="absolute inset-0 w-full h-full object-cover" />
+            <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(15,23,42,0.35), rgba(15,23,42,0) 35%)" }} />
+          </div>
+          <div className="grid sm:grid-cols-2 gap-5">
           {benefits.map(b => (
             <div key={b.title} className="p-6 rounded-2xl border hover:border-lime-400/40 hover:-translate-y-0.5 transition-all" style={{ background: "rgba(255,255,255,0.05)", borderColor: "rgba(255,255,255,0.1)" }}>
               <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-4" style={{ background: "rgba(132,204,22,0.15)" }}><b.icon className="w-5 h-5" style={{ color: LIME }} /></div>
@@ -812,6 +834,7 @@ function LandingPros({ onPro }: { onPro: () => void }) {
               <p className="text-slate-400 text-sm leading-relaxed">{b.desc}</p>
             </div>
           ))}
+          </div>
         </div>
         <div className="text-center"><LimeBtn onClick={onPro} className="text-base px-8 py-3.5"><Briefcase className="w-4 h-4" />Registrarme como profesional</LimeBtn></div>
       </div>
