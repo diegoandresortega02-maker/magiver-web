@@ -29,6 +29,7 @@ import {
   ChevronLeft, ToggleLeft, ToggleRight, ThumbsUp, Camera,
   Upload, Trash2, Edit3, Settings, Image, FilePlus, Check,
   Users, TrendingUp, XCircle, AlertCircle, ChevronRight,
+  Bike, Sparkles, Flame, Leaf, Bug, Calculator, FlaskConical, Atom, Languages,
 } from "lucide-react";
 
 // ─── Design tokens ─────────────────────────────────────────────────────────
@@ -154,6 +155,16 @@ const SERVICES = [
   { id: "aire_acondicionado", label: "Aire acond.", icon: Wind, color: "#06B6D4" },
   { id: "albanil", label: "Albañil", icon: Wrench, color: "#8B5CF6" },
   { id: "pintor", label: "Pintor", icon: Paintbrush, color: "#EC4899" },
+  { id: "mecanico_moto", label: "Mecánico de motos", icon: Bike, color: "#DC2626" },
+  { id: "mecanico_auto", label: "Mecánico de autos", icon: Car, color: "#1D4ED8" },
+  { id: "lavado_autos", label: "Lavado de autos", icon: Sparkles, color: "#0EA5E9" },
+  { id: "termotanques", label: "Termotanques", icon: Flame, color: "#EA580C" },
+  { id: "jardineria", label: "Jardinería", icon: Leaf, color: "#16A34A" },
+  { id: "fumigacion", label: "Fumigación", icon: Bug, color: "#A16207" },
+  { id: "profesor_matematicas", label: "Profesor de Matemáticas", icon: Calculator, color: "#7C3AED" },
+  { id: "profesor_quimica", label: "Profesor de Química", icon: FlaskConical, color: "#0891B2" },
+  { id: "profesor_fisica", label: "Profesor de Física", icon: Atom, color: "#4F46E5" },
+  { id: "profesor_ingles", label: "Profesor de Inglés", icon: Languages, color: "#DB2777" },
   { id: "otro", label: "Otro", icon: MoreHorizontal, color: "#6B7280" },
 ];
 

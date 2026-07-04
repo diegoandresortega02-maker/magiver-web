@@ -61,6 +61,16 @@ export type ServiceCategory =
   | "aire_acondicionado"
   | "albanil"
   | "pintor"
+  | "mecanico_moto"
+  | "mecanico_auto"
+  | "lavado_autos"
+  | "termotanques"
+  | "jardineria"
+  | "fumigacion"
+  | "profesor_matematicas"
+  | "profesor_quimica"
+  | "profesor_fisica"
+  | "profesor_ingles"
   | "otro";
 
 export type JobStatus =
