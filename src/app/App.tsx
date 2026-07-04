@@ -610,7 +610,7 @@ function LandingHeader({ onClient, onPro, onAdmin }: { onClient: () => void; onP
           </nav>
           <div className="hidden lg:flex items-center gap-3">
             <button onClick={onPro} className="text-sm font-medium text-slate-300 hover:text-white transition-colors">Panel Pro</button>
-            <LimeBtn onClick={() => document.querySelector("#contacto")?.scrollIntoView({ behavior: "smooth" })}>Empezar</LimeBtn>
+            <LimeBtn onClick={onClient}>Empezar</LimeBtn>
           </div>
           {/* Cambio 1: botón Menú con label accesible */}
           <button
