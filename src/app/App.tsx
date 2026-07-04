@@ -634,7 +634,6 @@ function LandingHeader({ onClient, onPro, onAdmin }: { onClient: () => void; onP
 }
 
 function LandingHero({ onClient, onPro, onAdmin }: { onClient: () => void; onPro: () => void; onAdmin: () => void }) {
-  const scrollToContact = () => document.querySelector("#contacto")?.scrollIntoView({ behavior: "smooth" });
   return (
     <section
       className="pt-16 min-h-screen flex items-center bg-cover bg-center"
@@ -653,12 +652,11 @@ function LandingHero({ onClient, onPro, onAdmin }: { onClient: () => void; onPro
             <p className="text-slate-400 text-lg leading-relaxed mb-8 max-w-lg">
               Encuentra profesionales verificados cerca de ti para trabajos técnicos, mantenimiento, mano de obra y soluciones del día a día.
             </p>
-            {/* Cambio 8: botones principales llevan a Contacto o acción clara */}
             <div className="flex flex-col sm:flex-row gap-3 mb-10">
-              <LimeBtn onClick={scrollToContact} className="text-base px-8 py-3.5">
+              <LimeBtn onClick={onClient} className="text-base px-8 py-3.5">
                 <MapPin className="w-4 h-4" />Solicitar servicio
               </LimeBtn>
-              <button onClick={scrollToContact}
+              <button onClick={onPro}
                 className="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl font-semibold text-base border-2 transition-all hover:bg-white/10"
                 style={{ borderColor: "rgba(255,255,255,0.3)", color: "#fff" }}>
                 Soy profesional
@@ -933,125 +931,18 @@ function LandingFAQ() {
 
 // Cambio 7: dos caminos claros en contacto
 function LandingContact() {
-  const [path, setPath] = useState<"" | "cliente" | "profesional">("");
-  const [form, setForm] = useState({ name: "", phone: "", message: "" });
-  const [sent, setSent] = useState(false);
-
-  const pathConfig = {
-    cliente: {
-      label: "Quiero solicitar servicios",
-      color: LIME,
-      textColor: NAVY,
-      placeholder: "¿Qué servicio necesitas? Cuéntanos brevemente.",
-      icon: <MapPin className="w-5 h-5" />,
-    },
-    profesional: {
-      label: "Quiero trabajar como profesional",
-      color: NAVY,
-      textColor: "#fff",
-      placeholder: "¿Cuál es tu especialidad y años de experiencia?",
-      icon: <Briefcase className="w-5 h-5" />,
-    },
-  };
-
   return (
     <section id="contacto" className="py-24 bg-white">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-12">
+        <div className="text-center mb-8">
           <span className="inline-block text-xs font-bold tracking-widest uppercase mb-4" style={{ color: LIME }}>Contacto</span>
           <h2 className="text-4xl sm:text-5xl font-black mb-4" style={{ color: NAVY, letterSpacing: "-0.02em" }}>
-            ¿Cómo podemos{" "}
-            <span className="block">ayudarte?</span>
+            ¿Tenés dudas?{" "}
+            <span className="block">Escribinos.</span>
           </h2>
-          <p className="text-slate-500 text-lg max-w-lg mx-auto">Elige tu camino y nos ponemos en contacto contigo.</p>
+          <p className="text-slate-500 text-lg max-w-lg mx-auto">Para solicitar un servicio o registrarte como profesional, usá los botones de arriba — acá te dejamos cómo contactarnos directamente.</p>
         </div>
-
-        {/* Selector de camino */}
-        {!path && !sent && (
-          <div className="grid sm:grid-cols-2 gap-5 max-w-2xl mx-auto mb-10">
-            <button onClick={() => setPath("cliente")}
-              className="group flex flex-col items-center text-center p-8 rounded-2xl border-2 transition-all hover:shadow-xl hover:-translate-y-1 cursor-pointer"
-              style={{ borderColor: LIME, background: "#F7FEE7" }}>
-              <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4 transition-colors" style={{ background: LIME }}>
-                <MapPin className="w-8 h-8" style={{ color: NAVY }} />
-              </div>
-              <p className="font-black text-lg mb-2" style={{ color: NAVY }}>Necesito un servicio</p>
-              <p className="text-slate-500 text-sm leading-relaxed">Quiero encontrar un profesional verificado cerca de mí para un trabajo.</p>
-              <div className="mt-4 flex items-center gap-1 text-sm font-semibold" style={{ color: "#65A30D" }}>
-                Empezar <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-              </div>
-            </button>
-
-            <button onClick={() => setPath("profesional")}
-              className="group flex flex-col items-center text-center p-8 rounded-2xl border-2 transition-all hover:shadow-xl hover:-translate-y-1 cursor-pointer"
-              style={{ borderColor: NAVY, background: "#F8FAFC" }}>
-              <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style={{ background: NAVY }}>
-                <Briefcase className="w-8 h-8" style={{ color: LIME }} />
-              </div>
-              <p className="font-black text-lg mb-2" style={{ color: NAVY }}>Soy profesional</p>
-              <p className="text-slate-500 text-sm leading-relaxed">Quiero registrarme, verificar mi perfil y recibir solicitudes de trabajo cerca de mi zona.</p>
-              <div className="mt-4 flex items-center gap-1 text-sm font-semibold" style={{ color: NAVY }}>
-                Registrarme <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-              </div>
-            </button>
-          </div>
-        )}
-
-        {/* Formulario según camino elegido */}
-        {path && !sent && (
-          <div className="max-w-xl mx-auto">
-            <button onClick={() => setPath("")} className="flex items-center gap-2 text-sm text-slate-400 hover:text-slate-600 transition-colors mb-6">
-              <ChevronLeft className="w-4 h-4" />Volver
-            </button>
-            <div className="p-5 rounded-2xl mb-6 flex items-center gap-3"
-              style={{ background: path === "cliente" ? "#F7FEE7" : "#F8FAFC", border: `2px solid ${path === "cliente" ? LIME : "#E5E7EB"}` }}>
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                style={{ background: path === "cliente" ? LIME : NAVY }}>
-                {path === "cliente"
-                  ? <MapPin className="w-5 h-5" style={{ color: NAVY }} />
-                  : <Briefcase className="w-5 h-5" style={{ color: LIME }} />
-                }
-              </div>
-              <p className="font-bold text-sm" style={{ color: NAVY }}>{pathConfig[path].label}</p>
-            </div>
-            <form onSubmit={e => { e.preventDefault(); setSent(true); }} className="flex flex-col gap-4">
-              <InputField label="Nombre completo" placeholder="Ej. María López" value={form.name} onChange={v => setForm({ ...form, name: v })} icon={<User className="w-4 h-4" />} />
-              <InputField label="Teléfono / WhatsApp" type="tel" placeholder="+591 7xxxxxxx" value={form.phone} onChange={v => setForm({ ...form, phone: v })} icon={<Phone className="w-4 h-4" />} />
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: NAVY }}>Cuéntanos un poco</label>
-                <textarea value={form.message} onChange={e => setForm({ ...form, message: e.target.value })}
-                  placeholder={pathConfig[path].placeholder} rows={3}
-                  className="w-full px-4 py-3 rounded-xl border text-sm outline-none bg-white resize-none"
-                  style={{ borderColor: "#E5E7EB", color: NAVY }} />
-              </div>
-              <LimeBtn type="submit" className="w-full py-4 text-base mt-1">
-                Enviar mensaje <Send className="w-4 h-4" />
-              </LimeBtn>
-            </form>
-          </div>
-        )}
-
-        {sent && (
-          <div className="max-w-sm mx-auto text-center py-8">
-            <div className="w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-5" style={{ background: "#F0FDF4" }}>
-              <CheckCircle className="w-10 h-10 text-green-600" />
-            </div>
-            <h3 className="font-black text-2xl mb-2" style={{ color: NAVY }}>¡Mensaje enviado!</h3>
-            <p className="text-slate-500 text-sm leading-relaxed mb-6">
-              {path === "cliente"
-                ? "Nos ponemos en contacto muy pronto para ayudarte a encontrar el profesional ideal."
-                : "Revisaremos tu solicitud y te contactamos para completar el proceso de verificación."}
-            </p>
-            <button onClick={() => { setSent(false); setPath(""); setForm({ name: "", phone: "", message: "" }); }}
-              className="text-sm font-semibold underline underline-offset-2 hover:opacity-70 transition-colors"
-              style={{ color: LIME }}>
-              Enviar otro mensaje
-            </button>
-          </div>
-        )}
-
-        {/* Info de contacto al pie */}
-        <div className="flex flex-wrap justify-center gap-6 mt-14 pt-10 border-t" style={{ borderColor: "#E5E7EB" }}>
+        <div className="flex flex-wrap justify-center gap-6 pt-10 border-t" style={{ borderColor: "#E5E7EB" }}>
           {[{ icon: Mail, t: "contacto@magiver.com" }, { icon: Phone, t: "+591 700 00000" }, { icon: MapPin, t: "Santa Cruz de la Sierra, Bolivia" }].map(({ icon: Icon, t }) => (
             <div key={t} className="flex items-center gap-2 text-slate-400 text-sm">
               <Icon className="w-4 h-4 flex-shrink-0" style={{ color: LIME }} />{t}
@@ -2675,8 +2566,6 @@ function LandingPage() {
     return () => observers.forEach(o => o.disconnect());
   }, []);
 
-  const scrollContact = () => document.querySelector("#contacto")?.scrollIntoView({ behavior: "smooth" });
-
   return (
     <div style={{ fontFamily: "Inter, sans-serif" }}>
       <DevStatus />
@@ -2688,8 +2577,8 @@ function LandingPage() {
       <main>
         <div id="hero-top">
           <LandingHero
-            onClient={scrollContact}
-            onPro={scrollContact}
+            onClient={() => navigate("/cliente")}
+            onPro={() => navigate("/profesional")}
             onAdmin={() => navigate("/admin")}
           />
         </div>
