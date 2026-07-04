@@ -8,6 +8,16 @@ import catPlomero from "@/assets/photos/cat-plomero.jpg";
 import catAire from "@/assets/photos/cat-aire-acondicionado.jpg";
 import catAlbanil from "@/assets/photos/cat-albanil.jpg";
 import catPintor from "@/assets/photos/cat-pintor.jpg";
+import catMecanicoMotos from "@/assets/photos/cat-mecanico-motos.jpg";
+import catMecanicoAutos from "@/assets/photos/cat-mecanico-autos.jpg";
+import catLavadoAutos from "@/assets/photos/cat-lavado-autos.jpg";
+import catTermotanques from "@/assets/photos/cat-termotanques.jpg";
+import catJardineria from "@/assets/photos/cat-jardineria.jpg";
+import catFumigacion from "@/assets/photos/cat-fumigacion.jpg";
+import catProfMatematicas from "@/assets/photos/cat-profesor-matematicas.jpg";
+import catProfQuimica from "@/assets/photos/cat-profesor-quimica.jpg";
+import catProfFisica from "@/assets/photos/cat-profesor-fisica.jpg";
+import catProfIngles from "@/assets/photos/cat-profesor-ingles.jpg";
 import { config } from "@/lib/config";
 import { realtime } from "@/lib/realtime";
 import { loginClient, registerClient, loginPro, loginAdmin } from "@/lib/auth";
@@ -735,7 +745,17 @@ function LandingServices({ onClient }: { onClient: () => void }) {
     { icon: Wind, title: "Aire acondicionado", desc: "Instalación, limpieza y reparación de equipos.", photo: catAire },
     { icon: Wrench, title: "Albañil", desc: "Construcción, remodelación y trabajos civiles.", photo: catAlbanil },
     { icon: Paintbrush, title: "Pintor", desc: "Pintura interior, exterior y decorativa.", photo: catPintor },
-    { icon: MoreHorizontal, title: "Otros servicios", desc: "Carpintería, cerrajería, jardinería y más.", photo: undefined },
+    { icon: Bike, title: "Mecánico de motos", desc: "Reparación y mantenimiento de motocicletas.", photo: catMecanicoMotos },
+    { icon: Car, title: "Mecánico de autos", desc: "Diagnóstico, reparación y mantenimiento automotriz.", photo: catMecanicoAutos },
+    { icon: Sparkles, title: "Lavado de autos", desc: "Lavado exterior, interior y encerado a domicilio.", photo: catLavadoAutos },
+    { icon: Flame, title: "Termotanques", desc: "Instalación y reparación de calefones y termotanques.", photo: catTermotanques },
+    { icon: Leaf, title: "Jardinería", desc: "Poda, mantenimiento de jardines y áreas verdes.", photo: catJardineria },
+    { icon: Bug, title: "Fumigación", desc: "Control de plagas para el hogar y el jardín.", photo: catFumigacion },
+    { icon: Calculator, title: "Profesor de Matemáticas", desc: "Clases particulares para colegio y universidad.", photo: catProfMatematicas },
+    { icon: FlaskConical, title: "Profesor de Química", desc: "Clases particulares de química para todo nivel.", photo: catProfQuimica },
+    { icon: Atom, title: "Profesor de Física", desc: "Clases particulares de física para todo nivel.", photo: catProfFisica },
+    { icon: Languages, title: "Profesor de Inglés", desc: "Clases particulares de inglés para todo nivel.", photo: catProfIngles },
+    { icon: MoreHorizontal, title: "Otros servicios", desc: "Carpintería, cerrajería y más.", photo: undefined },
   ];
   return (
     <section id="servicios" className="py-24" style={{ background: LIGHT }}>
