@@ -141,6 +141,26 @@ export async function getMessages(requestId: string): Promise<ChatMessage[]> {
   return (data ?? []).map(m => ({ id: m.id, requestId: m.request_id, from: m.sender_role, senderId: m.sender_id, text: m.text, sentAt: m.sent_at }));
 }
 
+// Suscribe a los mensajes nuevos de una solicitud vía Supabase Realtime.
+// RLS de chat_messages (messages_select_involved) ya limita los eventos que
+// llegan solo al cliente o profesional involucrados en esa solicitud.
+// Devuelve una función para cancelar la suscripción.
+export function subscribeToMessages(requestId: string, onInsert: (m: ChatMessage) => void): () => void {
+  if (config.MOCK_MODE) return () => {};
+  const channel = supabase
+    .channel(`chat-${requestId}`)
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "chat_messages", filter: `request_id=eq.${requestId}` },
+      (payload) => {
+        const m = payload.new as any;
+        onInsert({ id: m.id, requestId: m.request_id, from: m.sender_role, senderId: m.sender_id, text: m.text, sentAt: m.sent_at });
+      },
+    )
+    .subscribe();
+  return () => { supabase.removeChannel(channel); };
+}
+
 export async function sendMessage(requestId: string, text: string): Promise<ChatMessage> {
   if (config.MOCK_MODE) {
     await delay(200);

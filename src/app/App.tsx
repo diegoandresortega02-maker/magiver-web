@@ -27,8 +27,9 @@ import {
   getPendingVerifications, approveVerification, rejectVerification,
   getNearbyProfessionals, createServiceRequest, updateJobStatus, submitReview,
   uploadJobPhoto, getActiveProfessionals, getRejectedProfessionals, getAdminStats,
+  getMessages, sendMessage, subscribeToMessages,
 } from "@/lib/api";
-import type { PendingVerification, ProUser as ApiProUser, AdminStats } from "@/lib/types";
+import type { PendingVerification, ProUser as ApiProUser, AdminStats, ChatMessage } from "@/lib/types";
 import {
   MapPin, Shield, Star, CheckCircle, ChevronDown, Menu, X,
   Zap, Droplets, Wind, Wrench, Paintbrush, MoreHorizontal,
@@ -250,6 +251,43 @@ function AppContextProvider({ children }: { children: React.ReactNode }) {
       {children}
     </AppContext.Provider>
   );
+}
+
+// ─── Chat en tiempo real (Supabase Realtime) ─────────────────────────────────
+// Reemplaza la simulación local (addMessage + setTimeout) por mensajes reales
+// persistidos en chat_messages, sincronizados en vivo por Supabase Realtime.
+// Funciona entre sesiones/dispositivos distintos, no solo dentro de una misma
+// pestaña — RLS (messages_select_involved) ya limita los eventos que llegan
+// solo al cliente o profesional de esa solicitud.
+function toLocalMessage(m: ChatMessage): Message {
+  return {
+    id: m.id,
+    from: m.from === "professional" ? "pro" : "client",
+    text: m.text,
+    time: new Date(m.sentAt).toLocaleTimeString("es-BO", { hour: "2-digit", minute: "2-digit" }),
+  };
+}
+
+function useChatMessages(requestId: string | undefined) {
+  const [messages, setMessages] = useState<Message[]>([]);
+
+  useEffect(() => {
+    if (config.MOCK_MODE || !requestId) { setMessages([]); return; }
+    let active = true;
+    setMessages([]);
+    getMessages(requestId).then(msgs => { if (active) setMessages(msgs.map(toLocalMessage)); }).catch(() => {});
+    const unsubscribe = subscribeToMessages(requestId, m => {
+      setMessages(prev => prev.some(x => x.id === m.id) ? prev : [...prev, toLocalMessage(m)]);
+    });
+    return () => { active = false; unsubscribe(); };
+  }, [requestId]);
+
+  const send = async (text: string) => {
+    if (!requestId) return;
+    await sendMessage(requestId, text);
+  };
+
+  return { messages, send };
 }
 
 // ─── Shared primitives ──────────────────────────────────────────────────────
@@ -2639,6 +2677,8 @@ function ClientePortal() {
     activeRequest, setActiveRequest, selectedPro, setSelectedPro,
     clientRating, setClientRating, resetMarketplace,
   } = useAppCtx();
+  const realChat = useChatMessages(activeRequest?.id);
+  const chatMessages = config.MOCK_MODE ? messages : realChat.messages;
 
   const [screen, setScreen] = useState<CS>("auth");
   const [clientUser, setClientUser] = useState<ClientUser | null>(null);
@@ -2647,12 +2687,18 @@ function ClientePortal() {
   const handleMatched = () => {
     setJobStatus("matched");
     setScreen("tracking");
-    setTimeout(() => addMessage("pro", `Hola, soy ${selectedPro?.name}. Ya acepté tu solicitud. En ${selectedPro?.eta} minutos estoy contigo.`), 800);
+    if (config.MOCK_MODE) {
+      setTimeout(() => addMessage("pro", `Hola, soy ${selectedPro?.name}. Ya acepté tu solicitud. En ${selectedPro?.eta} minutos estoy contigo.`), 800);
+    }
   };
   const handleClientMsg = (text: string) => {
-    addMessage("client", text);
-    const r = ["Entendido, ya voy en camino.", "Sin problema, llego pronto.", "Ok, avísame si necesitas algo más.", "Perfecto."];
-    setTimeout(() => addMessage("pro", r[Math.floor(Math.random() * r.length)]), 1200);
+    if (config.MOCK_MODE) {
+      addMessage("client", text);
+      const r = ["Entendido, ya voy en camino.", "Sin problema, llego pronto.", "Ok, avísame si necesitas algo más.", "Perfecto."];
+      setTimeout(() => addMessage("pro", r[Math.floor(Math.random() * r.length)]), 1200);
+    } else {
+      realChat.send(text).catch(() => {});
+    }
   };
   const reset = () => { resetMarketplace(); setSelectedService(""); };
 
@@ -2662,7 +2708,7 @@ function ClientePortal() {
   if (screen === "map") return <ClientMap service={selectedService} onRequest={p => { setSelectedPro(p); setScreen("request"); }} onBack={() => setScreen("services")} />;
   if (screen === "request") return <ClientRequest service={selectedService} pro={selectedPro!} onSubmit={req => { setActiveRequest(req); setJobStatus("searching"); setScreen("searching"); }} onBack={() => setScreen("map")} />;
   if (screen === "searching") return <ClientSearching pro={selectedPro!} onMatched={handleMatched} />;
-  if (screen === "tracking") return <ClientTracking pro={selectedPro!} request={activeRequest!} jobStatus={jobStatus} messages={messages} onSendMessage={handleClientMsg} onComplete={() => setScreen("price")} onBack={() => setScreen("services")} />;
+  if (screen === "tracking") return <ClientTracking pro={selectedPro!} request={activeRequest!} jobStatus={jobStatus} messages={chatMessages} onSendMessage={handleClientMsg} onComplete={() => setScreen("price")} onBack={() => setScreen("services")} />;
   if (screen === "price") return <ClientPricePaid pro={selectedPro!} requestId={activeRequest?.id} onDone={price => { setActiveRequest(activeRequest ? { ...activeRequest, agreedPrice: price } : activeRequest); setScreen("rate"); }} />;
   if (screen === "rate") return <ClientRate pro={selectedPro!} requestId={activeRequest?.id} onSubmit={r => { setClientRating(r); setScreen("done"); }} />;
   if (screen === "done") return <ClientDone pro={selectedPro!} rating={clientRating ?? 0} onAgain={() => { reset(); setScreen("services"); }} onHome={() => { reset(); navigate("/"); }} />;
@@ -2679,6 +2725,8 @@ function ProfesionalPortal() {
     activeRequest, setActiveRequest, selectedPro, setSelectedPro,
     clientRating, resetMarketplace,
   } = useAppCtx();
+  const realChat = useChatMessages(activeRequest?.id);
+  const chatMessages = config.MOCK_MODE ? messages : realChat.messages;
 
   const [screen, setScreen] = useState<PS>("auth");
   const [proUser, setProUser] = useState<ProUser | null>(null);
@@ -2687,8 +2735,9 @@ function ProfesionalPortal() {
   const handleProAccept = () => {
     setJobStatus("en_camino");
     setScreen("job");
-    setTimeout(() => addMessage("pro", `Hola, soy ${proUser?.name}. Acabo de aceptar tu solicitud. En 12 minutos estoy contigo.`), 500);
-    if (!config.MOCK_MODE && activeRequest?.id) {
+    if (config.MOCK_MODE) {
+      setTimeout(() => addMessage("pro", `Hola, soy ${proUser?.name}. Acabo de aceptar tu solicitud. En 12 minutos estoy contigo.`), 500);
+    } else if (activeRequest?.id) {
       updateJobStatus(activeRequest.id, "en_camino").catch(() => {});
     }
   };
@@ -2701,13 +2750,14 @@ function ProfesionalPortal() {
   };
   const handleProStatus = (status: JobStatus) => {
     setJobStatus(status);
-    const msgs: Record<string, string> = {
-      en_camino: "¡Voy en camino! Estaré ahí en aproximadamente 12 minutos.",
-      en_sitio: "¡Ya llegué! Estoy en la puerta.",
-      completado: "¡Listo! El trabajo ha sido completado. Fue un placer trabajar contigo.",
-    };
-    if (msgs[status]) setTimeout(() => addMessage("pro", msgs[status]), 300);
-    if (!config.MOCK_MODE && activeRequest?.id && (status === "en_camino" || status === "en_sitio")) {
+    if (config.MOCK_MODE) {
+      const msgs: Record<string, string> = {
+        en_camino: "¡Voy en camino! Estaré ahí en aproximadamente 12 minutos.",
+        en_sitio: "¡Ya llegué! Estoy en la puerta.",
+        completado: "¡Listo! El trabajo ha sido completado. Fue un placer trabajar contigo.",
+      };
+      if (msgs[status]) setTimeout(() => addMessage("pro", msgs[status]), 300);
+    } else if (activeRequest?.id && (status === "en_camino" || status === "en_sitio")) {
       updateJobStatus(activeRequest.id, status).catch(() => {});
     }
   };
@@ -2726,9 +2776,13 @@ function ProfesionalPortal() {
     setScreen("verify");
   };
   const handleProMsg = (text: string) => {
-    addMessage("pro", text);
-    const r = ["Perfecto, muchas gracias.", "Ok, te espero.", "Entendido.", "Gracias por la información."];
-    setTimeout(() => addMessage("client", r[Math.floor(Math.random() * r.length)]), 1200);
+    if (config.MOCK_MODE) {
+      addMessage("pro", text);
+      const r = ["Perfecto, muchas gracias.", "Ok, te espero.", "Entendido.", "Gracias por la información."];
+      setTimeout(() => addMessage("client", r[Math.floor(Math.random() * r.length)]), 1200);
+    } else {
+      realChat.send(text).catch(() => {});
+    }
   };
   const simulateRequest = () => {
     const req: ServiceRequest = { service: "Electricista", description: "Revisión del tablero eléctrico y reparación de tomacorriente.", address: "Calle Los Pinos #342, Equipetrol" };
@@ -2745,7 +2799,7 @@ function ProfesionalPortal() {
   if (screen === "dashboard") return <ProDashboard user={proUser!} jobStatus={jobStatus} activeRequest={activeRequest} onViewRequest={() => setScreen((jobStatus === "searching" || jobStatus === "matched") ? "request" : "job")} onProfile={() => setScreen("profile")} onDocuments={() => setScreen("docview")} onLogout={() => { setProUser(null); navigate("/"); }} onSimulateRequest={simulateRequest} />;
   if (screen === "profile") return <ProProfile user={proUser!} onSave={u => { setProUser(u); setScreen("dashboard"); }} onDocuments={() => setScreen("docview")} onBack={() => setScreen("dashboard")} />;
   if (screen === "request") return <ProRequestDetail request={activeRequest ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} onAccept={handleProAccept} onReject={handleProReject} onBack={() => setScreen("dashboard")} />;
-  if (screen === "job") return <ProActiveJob request={activeRequest ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} jobStatus={jobStatus} messages={messages} onStatusChange={handleProStatus} onSendMessage={handleProMsg} onFinish={handleJobFinish} onBack={() => setScreen("dashboard")} />;
+  if (screen === "job") return <ProActiveJob request={activeRequest ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} jobStatus={jobStatus} messages={chatMessages} onStatusChange={handleProStatus} onSendMessage={handleProMsg} onFinish={handleJobFinish} onBack={() => setScreen("dashboard")} />;
   if (screen === "done") return <ProJobDone clientRating={clientRating} onHome={() => { resetMarketplace(); setScreen("dashboard"); }} />;
   return null;
 }
