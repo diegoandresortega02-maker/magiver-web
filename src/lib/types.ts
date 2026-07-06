@@ -95,6 +95,8 @@ export interface ServiceRequest {
   createdAt: string;
   updatedAt: string;
   completedAt?: string;
+  searchRadiusKm?: number;   // radio actual de transmisión mientras status='pending' sin asignar
+  radiusTier?: number;
 }
 
 // ─── Chat ────────────────────────────────────────────────────────────────────

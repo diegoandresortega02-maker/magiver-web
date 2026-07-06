@@ -81,7 +81,11 @@ export async function updateMyPresence(input: { isOnline: boolean; location?: Ge
 // ─── Solicitudes de servicio ──────────────────────────────────────────────────
 
 export interface CreateRequestPayload {
-  professionalId: string;
+  // Ya no se elige un profesional al crear la solicitud — se transmite a los
+  // profesionales cercanos (ver requests_select_broadcast_pool / accept_service_request).
+  // Queda opcional solo por si el flujo de elegir directamente (ClientMap, hoy
+  // inactivo) se reactiva más adelante.
+  professionalId?: string;
   category: ServiceCategory;
   description: string;
   address: { street: string; zone: string; city: string; lat: number; lng: number };
@@ -97,6 +101,8 @@ function rowToServiceRequest(row: any): ServiceRequest {
     },
     status: row.status, agreedPrice: row.agreed_price != null ? Number(row.agreed_price) : undefined,
     createdAt: row.created_at, updatedAt: row.updated_at, completedAt: row.completed_at ?? undefined,
+    searchRadiusKm: row.search_radius_km != null ? Number(row.search_radius_km) : undefined,
+    radiusTier: row.radius_tier ?? undefined,
   };
 }
 
@@ -115,7 +121,7 @@ export async function createServiceRequest(payload: CreateRequestPayload): Promi
   if (!clientId) throw { code: "not_authenticated", message: "Debes iniciar sesión para solicitar un servicio." };
 
   const { data, error } = await supabase.from("service_requests").insert({
-    client_id: clientId, professional_id: payload.professionalId, category: payload.category,
+    client_id: clientId, professional_id: payload.professionalId ?? null, category: payload.category,
     description: payload.description, address_street: payload.address.street,
     address_zone: payload.address.zone, address_city: payload.address.city,
     address_lat: payload.address.lat, address_lng: payload.address.lng,
@@ -183,6 +189,115 @@ export function subscribeToRequestChanges(
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "service_requests", filter: `professional_id=eq.${professionalId}` },
+      (payload) => onChange(rowToServiceRequest(payload.new)),
+    )
+    .subscribe();
+  return () => { supabase.removeChannel(channel); };
+}
+
+// ─── Despacho automático (broadcast + primero-en-aceptar) ────────────────────
+// El cliente ya no elige un profesional: la solicitud queda sin asignar
+// (professional_id null, status 'pending') y se transmite a los profesionales
+// activos/online de esa categoría (ver RLS requests_select_broadcast_pool).
+// El radio de búsqueda se amplía solo por etapas vía un job de pg_cron
+// (expand_stale_request_radius) — no depende de que el cliente tenga la
+// pestaña abierta.
+
+export type ProReasonCode = "too_far" | "client_unresponsive" | "no_longer_available" | "other";
+export type ClientReasonCode = "price_too_high" | "professional_unresponsive" | "no_longer_needed" | "other";
+
+// El primero en aceptar gana: la seguridad ante la condición de carrera la da
+// el UPDATE atómico dentro del RPC (accept_service_request), no este cliente.
+export async function acceptServiceRequest(requestId: string): Promise<ServiceRequest> {
+  if (config.MOCK_MODE) { await delay(400); return { id: requestId, status: "accepted" } as ServiceRequest; }
+  const { data, error } = await supabase.rpc("accept_service_request", { p_request_id: requestId });
+  if (error) {
+    if (error.message.includes("request_already_taken")) {
+      throw { code: "request_already_taken", message: "Otro profesional ya aceptó esta solicitud." };
+    }
+    throw { code: "db_error", message: error.message };
+  }
+  return rowToServiceRequest(data);
+}
+
+// Rechazar (antes de aceptar) solo registra el motivo — la solicitud sigue
+// 'pending' y visible para el resto de los profesionales de la categoría.
+export async function rejectServiceRequest(requestId: string, reasonCode: ProReasonCode, reasonText?: string): Promise<void> {
+  if (config.MOCK_MODE) { await delay(300); return; }
+  const { error } = await supabase.rpc("reject_service_request", {
+    p_request_id: requestId, p_reason_code: reasonCode, p_reason_text: reasonText ?? null,
+  });
+  if (error) throw { code: "db_error", message: error.message };
+}
+
+// Cancelar (después de aceptar) registra el motivo y reinicia la búsqueda
+// desde el radio inicial — válido tanto para el cliente como el profesional asignado.
+export async function cancelActiveJob(
+  requestId: string,
+  reasonCode: ProReasonCode | ClientReasonCode,
+  reasonText?: string,
+): Promise<ServiceRequest> {
+  if (config.MOCK_MODE) { await delay(400); return { id: requestId, status: "pending" } as ServiceRequest; }
+  const { data, error } = await supabase.rpc("cancel_active_job", {
+    p_request_id: requestId, p_reason_code: reasonCode, p_reason_text: reasonText ?? null,
+  });
+  if (error) throw { code: "db_error", message: error.message };
+  return rowToServiceRequest(data);
+}
+
+// Solicitudes que este profesional ya rechazó o canceló — para no
+// volver a ofrecérselas cuando el radio se amplía.
+export async function getRejectedRequestIds(professionalId: string): Promise<string[]> {
+  if (config.MOCK_MODE) return [];
+  const { data, error } = await supabase
+    .from("request_events")
+    .select("request_id")
+    .eq("professional_id", professionalId)
+    .in("event_type", ["reject", "cancel_by_professional"]);
+  if (error) throw { code: "db_error", message: error.message };
+  return (data ?? []).map((r: any) => r.request_id);
+}
+
+// La "bolsa" de solicitudes disponibles en la categoría de un profesional.
+// El radio se filtra en el cliente (haversineKm), no acá — Realtime no
+// puede filtrar por distancia, solo por columnas simples.
+export async function getAvailableOffersForProfessional(category: ServiceCategory): Promise<ServiceRequest[]> {
+  if (config.MOCK_MODE) return [];
+  const { data, error } = await supabase
+    .from("service_requests")
+    .select("*")
+    .eq("category", category)
+    .is("professional_id", null)
+    .eq("status", "pending")
+    .order("created_at", { ascending: false });
+  if (error) throw { code: "db_error", message: error.message };
+  return (data ?? []).map(rowToServiceRequest);
+}
+
+// Suscribe a los cambios de la bolsa de solicitudes disponibles de una
+// categoría (nuevas solicitudes, ampliación de radio, alguien más la acepta).
+export function subscribeToAvailableOffers(category: ServiceCategory, onChange: (row: ServiceRequest) => void): () => void {
+  if (config.MOCK_MODE) return () => {};
+  const channel = supabase
+    .channel(`offers-${category}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "service_requests", filter: `category=eq.${category}` },
+      (payload) => onChange(rowToServiceRequest(payload.new)),
+    )
+    .subscribe();
+  return () => { supabase.removeChannel(channel); };
+}
+
+// Suscribe a los cambios de UNA solicitud puntual (usado por el cliente
+// mientras espera a que alguien acepte la suya).
+export function subscribeToJobChanges(requestId: string, onChange: (row: ServiceRequest) => void): () => void {
+  if (config.MOCK_MODE) return () => {};
+  const channel = supabase
+    .channel(`job-${requestId}`)
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "service_requests", filter: `id=eq.${requestId}` },
       (payload) => onChange(rowToServiceRequest(payload.new)),
     )
     .subscribe();

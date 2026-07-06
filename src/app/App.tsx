@@ -29,7 +29,11 @@ import {
   uploadJobPhoto, getActiveProfessionals, getRejectedProfessionals, getAdminStats,
   getMessages, sendMessage, subscribeToMessages,
   getActiveRequestForProfessional, subscribeToRequestChanges, updateMyPresence,
+  getProfessionalById, subscribeToJobChanges, acceptServiceRequest, rejectServiceRequest,
+  cancelActiveJob, getAvailableOffersForProfessional, subscribeToAvailableOffers, getRejectedRequestIds,
+  getJobById,
 } from "@/lib/api";
+import type { ProReasonCode, ClientReasonCode } from "@/lib/api";
 import type { PendingVerification, ProUser as ApiProUser, AdminStats, ChatMessage, ServiceRequest as ApiServiceRequest, GeoPoint } from "@/lib/types";
 import {
   MapPin, Shield, Star, CheckCircle, ChevronDown, Menu, X,
@@ -143,7 +147,7 @@ interface Message { id: string; from: "client" | "pro"; text: string; time: stri
 interface ServiceRequest {
   service: string; description: string; address: string;
   id?: string; professionalId?: string; agreedPrice?: number; completionPhotoUrl?: string;
-  clientName?: string; lat?: number; lng?: number;
+  clientName?: string; lat?: number; lng?: number; searchRadiusKm?: number;
 }
 
 type JobStatus = "idle" | "searching" | "matched" | "en_camino" | "en_sitio" | "completado";
@@ -188,6 +192,21 @@ const SERVICES = [
 function specialtyLabel(value: string): string {
   return SERVICES.find(s => s.id === value)?.label ?? value;
 }
+
+// Motivos predefinidos para rechazar/cancelar (ver ReasonPickerSheet). Los
+// códigos coinciden con reason_code en la tabla request_events.
+const PRO_REASONS: { code: string; label: string }[] = [
+  { code: "too_far", label: "El lugar está muy lejos" },
+  { code: "client_unresponsive", label: "El cliente no responde en el chat" },
+  { code: "no_longer_available", label: "Ya no estoy disponible" },
+  { code: "other", label: "Otro" },
+];
+const CLIENT_REASONS: { code: string; label: string }[] = [
+  { code: "price_too_high", label: "El precio cotizado es muy alto" },
+  { code: "professional_unresponsive", label: "El profesional no responde en el chat" },
+  { code: "no_longer_needed", label: "Ya no necesito el servicio" },
+  { code: "other", label: "Otro" },
+];
 
 // Distancia real entre dos puntos GPS (fórmula de Haversine, en km).
 function haversineKm(a: GeoPoint, b: GeoPoint): number {
@@ -257,7 +276,8 @@ function nowStr() {
 // subscribeToRequestChanges) a la forma local que espera la UI del panel
 // profesional, y su estado de Postgres al JobStatus local usado en pantalla.
 function apiStatusToLocal(status: ApiServiceRequest["status"]): JobStatus {
-  if (status === "pending" || status === "accepted") return "matched";
+  if (status === "pending") return "searching"; // nadie la aceptó todavía (se está transmitiendo)
+  if (status === "accepted") return "matched";
   if (status === "en_camino") return "en_camino";
   if (status === "en_sitio" || status === "in_progress") return "en_sitio";
   return "completado";
@@ -268,7 +288,7 @@ function apiRequestToLocal(r: ApiServiceRequest & { clientName?: string }): Serv
     id: r.id, professionalId: r.professionalId, agreedPrice: r.agreedPrice, clientName: r.clientName,
     service: specialtyLabel(r.category), description: r.description,
     address: [r.address.street, r.address.zone].filter(Boolean).join(", "),
-    lat: r.address.coordinates?.lat, lng: r.address.coordinates?.lng,
+    lat: r.address.coordinates?.lat, lng: r.address.coordinates?.lng, searchRadiusKm: r.searchRadiusKm,
   };
 }
 
@@ -372,15 +392,60 @@ function LimeBtn({ children, onClick, className = "", type = "button", disabled 
   );
 }
 
-function DangerBtn({ children, onClick, className = "" }: {
-  children: React.ReactNode; onClick?: () => void; className?: string;
+function DangerBtn({ children, onClick, className = "", disabled = false }: {
+  children: React.ReactNode; onClick?: () => void; className?: string; disabled?: boolean;
 }) {
   return (
-    <button type="button" onClick={onClick}
-      className={`inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm border transition-all duration-150 hover:bg-red-50 active:scale-[0.98] ${className}`}
+    <button type="button" onClick={onClick} disabled={disabled}
+      className={`inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm border transition-all duration-150 hover:bg-red-50 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
       style={{ borderColor: "#FECACA", color: "#EF4444" }}>
       {children}
     </button>
+  );
+}
+
+// Panel inferior reusable para pedir un motivo antes de rechazar/cancelar una
+// solicitud: chips predefinidos + "Otro" con texto libre (obligatorio solo
+// para "Otro"). Un solo componente para los 3 usos: rechazar (profesional),
+// cancelar (profesional), cancelar (cliente) — cada uno con su propia lista
+// de motivos.
+function ReasonPickerSheet({ title, reasons, confirmLabel, loading, error, onConfirm, onClose }: {
+  title: string; reasons: { code: string; label: string }[]; confirmLabel: string;
+  loading: boolean; error?: string;
+  onConfirm: (reasonCode: string, reasonText?: string) => void; onClose: () => void;
+}) {
+  const [selected, setSelected] = useState<string | null>(null);
+  const [text, setText] = useState("");
+  const canConfirm = selected != null && (selected !== "other" || text.trim().length > 0);
+  return (
+    <div className="absolute inset-0 bg-black/40 z-20 flex items-end" onClick={onClose}>
+      <div className="w-full bg-white rounded-t-3xl p-6 pb-8" onClick={e => e.stopPropagation()}>
+        <div className="w-10 h-1 rounded-full bg-slate-200 mx-auto mb-5" />
+        <h3 className="font-black text-lg mb-4" style={{ color: NAVY }}>{title}</h3>
+        <div className="flex flex-col gap-2 mb-4">
+          {reasons.map(r => (
+            <button key={r.code} type="button" onClick={() => setSelected(r.code)}
+              className="text-left px-4 py-3 rounded-xl border text-sm font-medium transition-all"
+              style={{ borderColor: selected === r.code ? LIME : "#E5E7EB", background: selected === r.code ? "#F7FEE7" : "#fff", color: NAVY }}>
+              {r.label}
+            </button>
+          ))}
+        </div>
+        {selected === "other" && (
+          <textarea value={text} onChange={e => setText(e.target.value)} placeholder="Cuéntanos brevemente por qué..." rows={3}
+            className="w-full px-4 py-3 rounded-xl border text-sm outline-none bg-white resize-none mb-4" style={{ borderColor: "#E5E7EB", color: NAVY }} />
+        )}
+        {error && (
+          <p className="text-xs font-medium flex items-center gap-1.5 mb-3" style={{ color: "#EF4444" }}>
+            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />{error}
+          </p>
+        )}
+        <DangerBtn onClick={() => canConfirm && onConfirm(selected!, text.trim() || undefined)} disabled={!canConfirm || loading} className="w-full py-3.5 mb-2">
+          {loading ? <><Loader2 className="w-4 h-4 animate-spin" />Enviando...</> : confirmLabel}
+        </DangerBtn>
+        <button type="button" onClick={onClose} className="w-full text-sm text-slate-400 hover:text-slate-600 transition-colors text-center py-2">Volver</button>
+      </div>
+    </div>
   );
 }
 
@@ -1456,7 +1521,7 @@ function ClientMap({ service, clientLocation, onRequest, onBack }: { service: st
 }
 
 // ─── CLIENT REQUEST ───────────────────────────────────────────────────────────
-function ClientRequest({ service, pro, clientLocation, onSubmit, onBack }: { service: string; pro: Professional; clientLocation?: GeoPoint | null; onSubmit: (req: ServiceRequest) => void; onBack: () => void }) {
+function ClientRequest({ service, clientLocation, onSubmit, onBack }: { service: string; clientLocation?: GeoPoint | null; onSubmit: (req: ServiceRequest) => void; onBack: () => void }) {
   const [desc, setDesc] = useState(""); const [addr, setAddr] = useState("Calle Los Pinos #342, Equipetrol");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -1468,16 +1533,16 @@ function ClientRequest({ service, pro, clientLocation, onSubmit, onBack }: { ser
     try {
       if (config.MOCK_MODE) {
         await new Promise(r => setTimeout(r, 800));
-        onSubmit({ service, description: desc, address: addr, professionalId: pro.id, lat: clientLocation?.lat, lng: clientLocation?.lng });
+        onSubmit({ id: `req-${Date.now()}`, service, description: desc, address: addr, lat: clientLocation?.lat, lng: clientLocation?.lng });
         return;
       }
       const categoryId = (SERVICES.find(s => s.label === service)?.id ?? "otro") as any;
       const location = clientLocation ?? { lat: -17.785, lng: -63.181 };
       const real = await createServiceRequest({
-        professionalId: pro.id, category: categoryId, description: desc,
+        category: categoryId, description: desc,
         address: { street: addr, zone: "", city: "Santa Cruz de la Sierra", lat: location.lat, lng: location.lng },
       });
-      onSubmit({ id: real.id, service, description: desc, address: addr, professionalId: pro.id, lat: location.lat, lng: location.lng });
+      onSubmit({ id: real.id, service, description: desc, address: addr, lat: location.lat, lng: location.lng });
     } catch (err: any) {
       setError(err?.message || "No se pudo enviar la solicitud. Intenta de nuevo.");
     } finally {
@@ -1488,15 +1553,10 @@ function ClientRequest({ service, pro, clientLocation, onSubmit, onBack }: { ser
     <ScreenWrap>
       <AppHeader title="Detalles del servicio" onBack={onBack} />
       <div className="flex-1 overflow-y-auto p-5">
-        <Card className="mb-5">
-          <div className="flex items-center gap-3">
-            <ProAvatar pro={pro} />
-            <div>
-              <div className="flex items-center gap-1.5"><p className="font-bold text-sm" style={{ color: NAVY }}>{pro.name}</p><BadgeCheck className="w-4 h-4 text-blue-500" /></div>
-              <p className="text-xs text-slate-500">{pro.specialty} · {pro.distance} km · llega en {pro.eta} min</p>
-            </div>
-          </div>
-        </Card>
+        <div className="mb-5 p-4 rounded-xl border flex items-center gap-2" style={{ background: "#F0FDF4", borderColor: "#BBF7D0" }}>
+          <Zap className="w-4 h-4 flex-shrink-0" style={{ color: "#16A34A" }} />
+          <p className="text-xs text-green-800">Vamos a avisarle a los profesionales de <strong>{service}</strong> más cercanos a tu zona.</p>
+        </div>
         <form onSubmit={handleSubmit} className="flex flex-col gap-5">
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: NAVY }}>Descripción del trabajo</label>
@@ -1524,49 +1584,92 @@ function ClientRequest({ service, pro, clientLocation, onSubmit, onBack }: { ser
 }
 
 // ─── CLIENT SEARCHING ─────────────────────────────────────────────────────────
-function ClientSearching({ pro, onMatched }: { pro: Professional; onMatched: () => void }) {
-  const [matched, setMatched] = useState(false);
-  useEffect(() => { const t = setTimeout(() => { setMatched(true); setTimeout(onMatched, 1500); }, 3000); return () => clearTimeout(t); }, [onMatched]);
+function ClientSearching({ requestId, onMatched, onCancel }: {
+  requestId: string; onMatched: (pro: Professional) => void; onCancel: () => void;
+}) {
+  const [radiusKm, setRadiusKm] = useState(3);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState("");
+
+  useEffect(() => {
+    if (config.MOCK_MODE) {
+      const t = setTimeout(() => {
+        getProfessionalById("pro-001").then(u => onMatched(proUserToProfessional(u, 0)));
+      }, 3000);
+      return () => clearTimeout(t);
+    }
+    let active = true;
+    getJobById(requestId).then(r => { if (active && r.searchRadiusKm != null) setRadiusKm(r.searchRadiusKm); }).catch(() => {});
+    const unsubscribe = subscribeToJobChanges(requestId, row => {
+      if (row.searchRadiusKm != null) setRadiusKm(row.searchRadiusKm);
+      if (row.professionalId) {
+        getProfessionalById(row.professionalId).then(u => onMatched(proUserToProfessional(u, 0))).catch(() => {});
+      }
+    });
+    return () => { active = false; unsubscribe(); };
+  }, [requestId]);
+
+  const handleCancel = async () => {
+    setCancelling(true); setCancelError("");
+    try {
+      if (!config.MOCK_MODE) await updateJobStatus(requestId, "cancelled");
+      onCancel();
+    } catch (err: any) {
+      setCancelError(err?.message || "No se pudo cancelar. Intenta de nuevo.");
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   return (
     <ScreenWrap>
       <AppHeader title="Buscando profesional" />
       <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
         <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-        {!matched ? (
-          <>
-            <div className="relative mb-8">
-              <div className="w-24 h-24 rounded-full border-4 border-lime-200 flex items-center justify-center" style={{ borderTopColor: LIME, animation: "spin 1.2s linear infinite" }}>
-                <ProAvatar pro={pro} size="lg" />
-              </div>
-            </div>
-            <h2 className="text-2xl font-black mb-2" style={{ color: NAVY }}>Notificando a profesionales...</h2>
-            <p className="text-slate-500 text-sm mb-6">Buscando disponibilidad cerca de tu ubicación</p>
-            <div className="flex items-center gap-2 text-sm text-slate-400"><Loader2 className="w-4 h-4 animate-spin" />Conectando con {pro.name}</div>
-          </>
-        ) : (
-          <>
-            <div className="w-24 h-24 rounded-full bg-green-100 flex items-center justify-center mb-6"><CheckCircle className="w-12 h-12 text-green-600" /></div>
-            <h2 className="text-2xl font-black mb-2" style={{ color: NAVY }}>¡Solicitud aceptada!</h2>
-            <p className="text-slate-500 text-sm mb-2"><strong>{pro.name}</strong> aceptó tu solicitud</p>
-            <p className="text-green-600 font-semibold text-sm">Llegará en aprox. {pro.eta} minutos</p>
-            <p className="text-xs text-slate-400 mt-4">Abriendo seguimiento...</p>
-          </>
+        <div className="relative mb-8">
+          <div className="w-24 h-24 rounded-full border-4 border-lime-200 flex items-center justify-center" style={{ borderTopColor: LIME, animation: "spin 1.2s linear infinite" }}>
+            <Loader2 className="w-8 h-8" style={{ color: LIME }} />
+          </div>
+        </div>
+        <h2 className="text-2xl font-black mb-2" style={{ color: NAVY }}>Notificando a profesionales...</h2>
+        <p className="text-slate-500 text-sm mb-2">Buscando disponibilidad en un radio de {radiusKm} km</p>
+        <div className="flex items-center gap-2 text-sm text-slate-400 mb-8"><Loader2 className="w-4 h-4 animate-spin" />Esperando que alguien acepte...</div>
+        {cancelError && (
+          <p className="text-xs font-medium flex items-center gap-1.5 mb-4" style={{ color: "#EF4444" }}>
+            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />{cancelError}
+          </p>
         )}
+        <DangerBtn onClick={handleCancel} disabled={cancelling} className="px-8 py-3">
+          {cancelling ? <><Loader2 className="w-4 h-4 animate-spin" />Cancelando...</> : "Cancelar búsqueda"}
+        </DangerBtn>
       </div>
     </ScreenWrap>
   );
 }
 
 // ─── CLIENT TRACKING ──────────────────────────────────────────────────────────
-function ClientTracking({ pro, request, jobStatus, messages, clientLocation, onSendMessage, onComplete, onBack }: {
+function ClientTracking({ pro, request, jobStatus, messages, clientLocation, onSendMessage, onComplete, onCancelled, onBack }: {
   pro: Professional; request: ServiceRequest; jobStatus: JobStatus;
   messages: Message[]; clientLocation?: GeoPoint | null; onSendMessage: (text: string) => void;
-  onComplete: () => void; onBack: () => void;
+  onComplete: () => void; onCancelled: () => void; onBack: () => void;
 }) {
   const [tab, setTab] = useState<"track" | "chat">("track");
   const [msg, setMsg] = useState("");
+  const [showCancel, setShowCancel] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState("");
   const chatRef = useRef<HTMLDivElement>(null);
   useEffect(() => { chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: "smooth" }); }, [messages]);
+  const handleCancel = async (reasonCode: string, reasonText?: string) => {
+    setCancelling(true); setCancelError("");
+    try {
+      if (!config.MOCK_MODE && request.id) await cancelActiveJob(request.id, reasonCode as ClientReasonCode, reasonText);
+      onCancelled();
+    } catch (err: any) {
+      setCancelError(err?.message || "No se pudo cancelar el servicio. Intenta de nuevo.");
+      setCancelling(false);
+    }
+  };
   const statusSteps = [
     { key: "matched" as JobStatus, label: "Solicitud aceptada", icon: <CheckCircle className="w-4 h-4" /> },
     { key: "en_camino" as JobStatus, label: "En camino", icon: <Car className="w-4 h-4" /> },
@@ -1616,6 +1719,11 @@ function ClientTracking({ pro, request, jobStatus, messages, clientLocation, onS
               })}
             </Card>
             {jobStatus === "completado" && <LimeBtn onClick={onComplete} className="w-full py-4 text-base">Calificar a {pro.name.split(" ")[0]} <Star className="w-4 h-4" /></LimeBtn>}
+            {jobStatus !== "completado" && (
+              <button onClick={() => setShowCancel(true)} className="w-full text-center text-sm font-semibold mt-2" style={{ color: "#EF4444" }}>
+                Cancelar servicio
+              </button>
+            )}
           </div>
         ) : (
           <div className="flex-1 flex flex-col">
@@ -1637,6 +1745,17 @@ function ClientTracking({ pro, request, jobStatus, messages, clientLocation, onS
           </div>
         )}
       </div>
+      {showCancel && (
+        <ReasonPickerSheet
+          title="¿Por qué cancelas este servicio?"
+          reasons={CLIENT_REASONS}
+          confirmLabel="Confirmar cancelación"
+          loading={cancelling}
+          error={cancelError || undefined}
+          onConfirm={handleCancel}
+          onClose={() => setShowCancel(false)}
+        />
+      )}
     </ScreenWrap>
   );
 }
@@ -2101,14 +2220,14 @@ function ProVerify({ user, onOpenAdmin }: { user: ProUser; onOpenAdmin: () => vo
 }
 
 // ─── PRO DASHBOARD ────────────────────────────────────────────────────────────
-function ProDashboard({ user, jobStatus, activeRequest, available, onToggleAvailable, onViewRequest, onProfile, onDocuments, onLogout, onSimulateRequest }: {
-  user: ProUser; jobStatus: JobStatus; activeRequest: ServiceRequest | null;
+function ProDashboard({ user, jobStatus, activeRequest, availableOffers, available, onToggleAvailable, onViewRequest, onViewOffer, onProfile, onDocuments, onLogout }: {
+  user: ProUser; jobStatus: JobStatus; activeRequest: ServiceRequest | null; availableOffers: ServiceRequest[];
   available: boolean; onToggleAvailable: () => void;
-  onViewRequest: () => void; onProfile: () => void; onDocuments: () => void;
-  onLogout: () => void; onSimulateRequest: () => void;
+  onViewRequest: () => void; onViewOffer: (offer: ServiceRequest) => void; onProfile: () => void; onDocuments: () => void;
+  onLogout: () => void;
 }) {
-  const hasIncoming = (jobStatus === "searching" || jobStatus === "matched") && activeRequest;
-  const hasActiveJob = jobStatus === "en_camino" || jobStatus === "en_sitio";
+  const hasIncoming = availableOffers.length > 0;
+  const hasActiveJob = jobStatus === "matched" || jobStatus === "en_camino" || jobStatus === "en_sitio";
   const recentJobs = [
     { name: "María López", service: "Instalación tomacorriente", date: "Hoy, 09:15", rating: 5 },
     { name: "Juan Quispe", service: "Revisión tablero eléctrico", date: "Ayer, 14:30", rating: 5 },
@@ -2161,16 +2280,6 @@ function ProDashboard({ user, jobStatus, activeRequest, available, onToggleAvail
         </div>
       </div>
       <div className="flex-1 overflow-y-auto p-4">
-        {hasIncoming && (
-          <div onClick={onViewRequest} className="mb-4 p-4 rounded-2xl border-2 cursor-pointer hover:shadow-lg transition-all" style={{ borderColor: LIME, background: "#F7FEE7" }}>
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full animate-ping" style={{ background: LIME }} /><span className="font-bold text-sm" style={{ color: NAVY }}>¡Nueva solicitud!</span></div>
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: LIME, color: NAVY }}>Ver ahora →</span>
-            </div>
-            <p className="text-sm text-slate-600">{activeRequest.service}</p>
-            <p className="text-xs text-slate-400 mt-0.5">📍 {activeRequest.address}</p>
-          </div>
-        )}
         {hasActiveJob && (
           <div onClick={onViewRequest} className="mb-4 p-4 rounded-2xl border cursor-pointer hover:shadow-md transition-all" style={{ borderColor: "#E5E7EB", background: "#F0FDF4" }}>
             <div className="flex items-center justify-between mb-2">
@@ -2185,11 +2294,27 @@ function ProDashboard({ user, jobStatus, activeRequest, available, onToggleAvail
             </div>
           </div>
         )}
-        {jobStatus === "idle" && (
+        {!hasActiveJob && availableOffers.length > 0 && (
+          <div className="mb-4">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Solicitudes disponibles cerca</p>
+            <div className="flex flex-col gap-3">
+              {availableOffers.map(offer => (
+                <div key={offer.id} onClick={() => onViewOffer(offer)} className="p-4 rounded-2xl border-2 cursor-pointer hover:shadow-lg transition-all" style={{ borderColor: LIME, background: "#F7FEE7" }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full animate-ping" style={{ background: LIME }} /><span className="font-bold text-sm" style={{ color: NAVY }}>Nueva solicitud</span></div>
+                    <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: LIME, color: NAVY }}>Ver →</span>
+                  </div>
+                  <p className="text-sm text-slate-600">{offer.service}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">📍 {offer.address}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {!hasActiveJob && availableOffers.length === 0 && (
           <div className="mb-4 p-4 rounded-2xl border" style={{ borderColor: "#E5E7EB", background: "#fff" }}>
-            <p className="text-sm font-semibold mb-1" style={{ color: NAVY }}>Sin solicitudes activas</p>
-            <p className="text-xs text-slate-500 mb-3">Mantente Online para recibir notificaciones de clientes cercanos.</p>
-            <button onClick={onSimulateRequest} className="text-xs font-semibold underline underline-offset-2 hover:opacity-70" style={{ color: LIME }}>Simular solicitud entrante (demo)</button>
+            <p className="text-sm font-semibold mb-1" style={{ color: NAVY }}>Sin solicitudes disponibles</p>
+            <p className="text-xs text-slate-500">Mantente Online para recibir notificaciones de clientes cercanos.</p>
           </div>
         )}
         <div className="grid grid-cols-2 gap-3 mb-5">
@@ -2280,10 +2405,40 @@ function ProProfile({ user, onSave, onDocuments, onBack }: { user: ProUser; onSa
 }
 
 // ─── PRO REQUEST ──────────────────────────────────────────────────────────────
-function ProRequestDetail({ request, proLocation, onAccept, onReject, onBack }: { request: ServiceRequest; proLocation?: GeoPoint | null; onAccept: () => void; onReject: () => void; onBack: () => void }) {
+function ProRequestDetail({ request, proLocation, onAccepted, onRejected, onBack }: {
+  request: ServiceRequest; proLocation?: GeoPoint | null;
+  onAccepted: () => void; onRejected: () => void; onBack: () => void;
+}) {
   const [loading, setLoading] = useState(false);
+  const [acceptError, setAcceptError] = useState("");
+  const [showReject, setShowReject] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
+  const [rejectError, setRejectError] = useState("");
   const clientLoc = request.lat != null && request.lng != null ? { lat: request.lat, lng: request.lng } : null;
   const realDistance = proLocation && clientLoc ? Math.round(haversineKm(proLocation, clientLoc) * 10) / 10 : null;
+
+  const handleAccept = async () => {
+    setLoading(true); setAcceptError("");
+    try {
+      if (!config.MOCK_MODE) await acceptServiceRequest(request.id!);
+      onAccepted();
+    } catch (err: any) {
+      setAcceptError(err?.message || "No se pudo aceptar la solicitud. Intenta de nuevo.");
+      setLoading(false);
+    }
+  };
+
+  const handleReject = async (reasonCode: string, reasonText?: string) => {
+    setRejecting(true); setRejectError("");
+    try {
+      if (!config.MOCK_MODE) await rejectServiceRequest(request.id!, reasonCode as ProReasonCode, reasonText);
+      onRejected();
+    } catch (err: any) {
+      setRejectError(err?.message || "No se pudo rechazar la solicitud. Intenta de nuevo.");
+      setRejecting(false);
+    }
+  };
+
   return (
     <ScreenWrap>
       <AppHeader title="Nueva solicitud" onBack={onBack} />
@@ -2319,28 +2474,57 @@ function ProRequestDetail({ request, proLocation, onAccept, onReject, onBack }: 
             fallback={<MapView selectedProId="1" />}
           />
         </div>
+        {acceptError && (
+          <p className="text-xs font-medium flex items-center gap-1.5 mb-3" style={{ color: "#EF4444" }}>
+            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />{acceptError}
+          </p>
+        )}
         <div className="flex flex-col gap-3">
-          <LimeBtn onClick={() => { setLoading(true); setTimeout(onAccept, 800); }} disabled={loading} className="w-full py-4 text-base">
+          <LimeBtn onClick={handleAccept} disabled={loading} className="w-full py-4 text-base">
             {loading ? <><Loader2 className="w-4 h-4 animate-spin" />Aceptando...</> : <>Aceptar solicitud <CheckCircle className="w-4 h-4" /></>}
           </LimeBtn>
-          <DangerBtn onClick={onReject} className="w-full py-3.5">Rechazar solicitud</DangerBtn>
+          <DangerBtn onClick={() => setShowReject(true)} className="w-full py-3.5">Rechazar solicitud</DangerBtn>
         </div>
       </div>
+      {showReject && (
+        <ReasonPickerSheet
+          title="¿Por qué rechazas esta solicitud?"
+          reasons={PRO_REASONS}
+          confirmLabel="Confirmar rechazo"
+          loading={rejecting}
+          error={rejectError || undefined}
+          onConfirm={handleReject}
+          onClose={() => setShowReject(false)}
+        />
+      )}
     </ScreenWrap>
   );
 }
 
 // ─── PRO ACTIVE JOB ───────────────────────────────────────────────────────────
-function ProActiveJob({ request, jobStatus, messages, onStatusChange, onSendMessage, onFinish, onBack }: {
+function ProActiveJob({ request, jobStatus, messages, onStatusChange, onSendMessage, onFinish, onCancelled, onBack }: {
   request: ServiceRequest; jobStatus: JobStatus; messages: Message[];
   onStatusChange: (s: JobStatus) => void; onSendMessage: (text: string) => void;
-  onFinish: (photoFile: File) => Promise<void>; onBack: () => void;
+  onFinish: (photoFile: File) => Promise<void>; onCancelled: () => void; onBack: () => void;
 }) {
   const [tab, setTab] = useState<"job" | "chat">("job");
   const [msg, setMsg] = useState("");
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [finishing, setFinishing] = useState(false);
   const [finishError, setFinishError] = useState("");
+  const [showCancel, setShowCancel] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState("");
+  const handleCancel = async (reasonCode: string, reasonText?: string) => {
+    setCancelling(true); setCancelError("");
+    try {
+      if (!config.MOCK_MODE && request.id) await cancelActiveJob(request.id, reasonCode as ProReasonCode, reasonText);
+      onCancelled();
+    } catch (err: any) {
+      setCancelError(err?.message || "No se pudo cancelar el trabajo. Intenta de nuevo.");
+      setCancelling(false);
+    }
+  };
   const chatRef = useRef<HTMLDivElement>(null);
   useEffect(() => { chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: "smooth" }); }, [messages]);
   const steps = [
@@ -2415,6 +2599,11 @@ function ProActiveJob({ request, jobStatus, messages, onStatusChange, onSendMess
                 </LimeBtn>
               </div>
             )}
+            {jobStatus !== "completado" && (
+              <button onClick={() => setShowCancel(true)} className="w-full text-center text-sm font-semibold mt-2" style={{ color: "#EF4444" }}>
+                Cancelar trabajo
+              </button>
+            )}
           </div>
         ) : (
           <div className="flex-1 flex flex-col">
@@ -2436,6 +2625,17 @@ function ProActiveJob({ request, jobStatus, messages, onStatusChange, onSendMess
           </div>
         )}
       </div>
+      {showCancel && (
+        <ReasonPickerSheet
+          title="¿Por qué cancelas este trabajo?"
+          reasons={PRO_REASONS}
+          confirmLabel="Confirmar cancelación"
+          loading={cancelling}
+          error={cancelError || undefined}
+          onConfirm={handleCancel}
+          onClose={() => setShowCancel(false)}
+        />
+      )}
     </ScreenWrap>
   );
 }
@@ -2825,7 +3025,7 @@ function LandingPage() {
 }
 
 // ─── PAGE: Cliente portal (/cliente) ─────────────────────────────────────────
-type CS = "auth" | "profile" | "services" | "map" | "request" | "searching" | "tracking" | "price" | "rate" | "done";
+type CS = "auth" | "profile" | "services" | "request" | "searching" | "tracking" | "price" | "rate" | "done";
 
 function ClientePortal() {
   const navigate = useNavigate();
@@ -2842,11 +3042,12 @@ function ClientePortal() {
   const [clientUser, setClientUser] = useState<ClientUser | null>(null);
   const [selectedService, setSelectedService] = useState("");
 
-  const handleMatched = () => {
+  const handleMatched = (pro: Professional) => {
+    setSelectedPro(pro);
     setJobStatus("matched");
     setScreen("tracking");
     if (config.MOCK_MODE) {
-      setTimeout(() => addMessage("pro", `Hola, soy ${selectedPro?.name}. Ya acepté tu solicitud. En ${selectedPro?.eta} minutos estoy contigo.`), 800);
+      setTimeout(() => addMessage("pro", `Hola, soy ${pro.name}. Ya acepté tu solicitud. En ${pro.eta} minutos estoy contigo.`), 800);
     }
   };
   const handleClientMsg = (text: string) => {
@@ -2862,11 +3063,10 @@ function ClientePortal() {
 
   if (screen === "auth") return <ClientAuth onDone={u => { setClientUser(u); setScreen("services"); }} onBack={() => navigate("/")} />;
   if (screen === "profile") return <ClientProfile user={clientUser!} onSave={u => { setClientUser(u); setScreen("services"); }} onBack={() => setScreen("services")} />;
-  if (screen === "services") return <ClientServices user={clientUser!} clientLocation={clientGeo.position} onSelect={s => { setSelectedService(s); setScreen("map"); }} onProfile={() => setScreen("profile")} onBack={() => navigate("/")} />;
-  if (screen === "map") return <ClientMap service={selectedService} clientLocation={clientGeo.position} onRequest={p => { setSelectedPro(p); setScreen("request"); }} onBack={() => setScreen("services")} />;
-  if (screen === "request") return <ClientRequest service={selectedService} pro={selectedPro!} clientLocation={clientGeo.position} onSubmit={req => { setActiveRequest(req); setJobStatus("searching"); setScreen("searching"); }} onBack={() => setScreen("map")} />;
-  if (screen === "searching") return <ClientSearching pro={selectedPro!} onMatched={handleMatched} />;
-  if (screen === "tracking") return <ClientTracking pro={selectedPro!} request={activeRequest!} jobStatus={jobStatus} messages={chatMessages} clientLocation={clientGeo.position} onSendMessage={handleClientMsg} onComplete={() => setScreen("price")} onBack={() => setScreen("services")} />;
+  if (screen === "services") return <ClientServices user={clientUser!} clientLocation={clientGeo.position} onSelect={s => { setSelectedService(s); setScreen("request"); }} onProfile={() => setScreen("profile")} onBack={() => navigate("/")} />;
+  if (screen === "request") return <ClientRequest service={selectedService} clientLocation={clientGeo.position} onSubmit={req => { setActiveRequest(req); setJobStatus("searching"); setScreen("searching"); }} onBack={() => setScreen("services")} />;
+  if (screen === "searching") return <ClientSearching requestId={activeRequest!.id!} onMatched={handleMatched} onCancel={() => { reset(); setScreen("services"); }} />;
+  if (screen === "tracking") return <ClientTracking pro={selectedPro!} request={activeRequest!} jobStatus={jobStatus} messages={chatMessages} clientLocation={clientGeo.position} onSendMessage={handleClientMsg} onComplete={() => setScreen("price")} onCancelled={() => { setJobStatus("searching"); setSelectedPro(null); setScreen("searching"); }} onBack={() => setScreen("services")} />;
   if (screen === "price") return <ClientPricePaid pro={selectedPro!} requestId={activeRequest?.id} onDone={price => { setActiveRequest(activeRequest ? { ...activeRequest, agreedPrice: price } : activeRequest); setScreen("rate"); }} />;
   if (screen === "rate") return <ClientRate pro={selectedPro!} requestId={activeRequest?.id} onSubmit={r => { setClientRating(r); setScreen("done"); }} />;
   if (screen === "done") return <ClientDone pro={selectedPro!} rating={clientRating ?? 0} onAgain={() => { reset(); setScreen("services"); }} onHome={() => { reset(); navigate("/"); }} />;
@@ -2919,20 +3119,49 @@ function ProfesionalPortal() {
     updateMyPresence({ isOnline: available, location: proPosition ?? undefined }).catch(() => {});
   }, [available, proPosition, proUser?.id]);
 
-  const handleProAccept = () => {
-    setJobStatus("en_camino");
+  // La "bolsa" de solicitudes disponibles (pending, sin asignar) en la
+  // categoría del profesional — solo mientras no tiene ya un trabajo activo.
+  const [availableOffers, setAvailableOffers] = useState<ServiceRequest[]>([]);
+  const [selectedOffer, setSelectedOffer] = useState<ServiceRequest | null>(null);
+  const [rejectedIds, setRejectedIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (config.MOCK_MODE || !proUser?.id || !proUser.specialty || activeRequest) { setAvailableOffers([]); return; }
+    let active = true;
+    const category = proUser.specialty as any;
+    getRejectedRequestIds(proUser.id).then(ids => { if (active) setRejectedIds(new Set(ids)); }).catch(() => {});
+    getAvailableOffersForProfessional(category).then(reqs => { if (active) setAvailableOffers(reqs.map(r => apiRequestToLocal(r))); }).catch(() => {});
+    const unsubscribe = subscribeToAvailableOffers(category, row => {
+      const local = apiRequestToLocal(row);
+      setAvailableOffers(prev => {
+        const withoutThis = prev.filter(o => o.id !== local.id);
+        if (row.status !== "pending" || row.professionalId) return withoutThis; // ya no está disponible
+        return [...withoutThis, local];
+      });
+    });
+    return () => { active = false; unsubscribe(); };
+  }, [proUser?.id, proUser?.specialty, !!activeRequest]);
+
+  // El radio se filtra acá (haversine), no en la consulta — Realtime solo
+  // puede filtrar por columnas simples (ver subscribeToAvailableOffers).
+  const visibleOffers = availableOffers.filter(o => {
+    if (o.id && rejectedIds.has(o.id)) return false;
+    if (!proPosition || o.lat == null || o.lng == null) return true;
+    return haversineKm(proPosition, { lat: o.lat, lng: o.lng }) <= (o.searchRadiusKm ?? 3);
+  });
+
+  const handleOfferAccepted = () => {
+    if (selectedOffer?.id) {
+      setActiveRequest(selectedOffer);
+      setJobStatus("en_camino");
+      if (!config.MOCK_MODE) updateJobStatus(selectedOffer.id, "en_camino").catch(() => {});
+    } else if (config.MOCK_MODE) {
+      setJobStatus("en_camino");
+    }
+    setSelectedOffer(null);
     setScreen("job");
-    if (config.MOCK_MODE) {
-      setTimeout(() => addMessage("pro", `Hola, soy ${proUser?.name}. Acabo de aceptar tu solicitud. En 12 minutos estoy contigo.`), 500);
-    } else if (activeRequest?.id) {
-      updateJobStatus(activeRequest.id, "en_camino").catch(() => {});
-    }
   };
-  const handleProReject = () => {
-    if (!config.MOCK_MODE && activeRequest?.id) {
-      updateJobStatus(activeRequest.id, "cancelled").catch(() => {});
-    }
-    resetMarketplace();
+  const handleOfferRejected = () => {
+    setSelectedOffer(null);
     setScreen("dashboard");
   };
   const handleProStatus = (status: JobStatus) => {
@@ -2971,22 +3200,15 @@ function ProfesionalPortal() {
       realChat.send(text).catch(() => {});
     }
   };
-  const simulateRequest = () => {
-    const req: ServiceRequest = { service: "Electricista", description: "Revisión del tablero eléctrico y reparación de tomacorriente.", address: "Calle Los Pinos #342, Equipetrol" };
-    setActiveRequest(req);
-    setJobStatus("searching");
-    if (!selectedPro) setSelectedPro(PROFESSIONALS[0]);
-  };
-
   if (screen === "auth") return <ProAuth onLogin={u => { setProUser(u); setScreen("dashboard"); }} onRegister={() => setScreen("register")} onBack={() => navigate("/")} />;
   if (screen === "register") return <ProRegister onSubmit={u => { setProUser(u); setScreen("documents"); }} onBack={() => setScreen("auth")} />;
   if (screen === "documents") return <ProDocuments user={proUser!} onSubmit={handleDocSubmit} onBack={() => setScreen("register")} />;
   if (screen === "docview") return <ProDocuments user={proUser!} onSubmit={() => {}} onBack={() => setScreen("profile")} viewOnly docs={proDocuments ?? undefined} />;
   if (screen === "verify") return <ProVerify user={proUser!} onOpenAdmin={() => navigate("/admin")} />;
-  if (screen === "dashboard") return <ProDashboard user={proUser!} jobStatus={jobStatus} activeRequest={activeRequest} available={available} onToggleAvailable={() => setAvailable(a => !a)} onViewRequest={() => setScreen((jobStatus === "searching" || jobStatus === "matched") ? "request" : "job")} onProfile={() => setScreen("profile")} onDocuments={() => setScreen("docview")} onLogout={() => { setProUser(null); navigate("/"); }} onSimulateRequest={simulateRequest} />;
+  if (screen === "dashboard") return <ProDashboard user={proUser!} jobStatus={jobStatus} activeRequest={activeRequest} availableOffers={visibleOffers} available={available} onToggleAvailable={() => setAvailable(a => !a)} onViewRequest={() => setScreen("job")} onViewOffer={offer => { setSelectedOffer(offer); setScreen("request"); }} onProfile={() => setScreen("profile")} onDocuments={() => setScreen("docview")} onLogout={() => { setProUser(null); navigate("/"); }} />;
   if (screen === "profile") return <ProProfile user={proUser!} onSave={u => { setProUser(u); setScreen("dashboard"); }} onDocuments={() => setScreen("docview")} onBack={() => setScreen("dashboard")} />;
-  if (screen === "request") return <ProRequestDetail request={activeRequest ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} proLocation={proPosition} onAccept={handleProAccept} onReject={handleProReject} onBack={() => setScreen("dashboard")} />;
-  if (screen === "job") return <ProActiveJob request={activeRequest ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} jobStatus={jobStatus} messages={chatMessages} onStatusChange={handleProStatus} onSendMessage={handleProMsg} onFinish={handleJobFinish} onBack={() => setScreen("dashboard")} />;
+  if (screen === "request") return <ProRequestDetail request={selectedOffer ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} proLocation={proPosition} onAccepted={handleOfferAccepted} onRejected={handleOfferRejected} onBack={() => { setSelectedOffer(null); setScreen("dashboard"); }} />;
+  if (screen === "job") return <ProActiveJob request={activeRequest ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} jobStatus={jobStatus} messages={chatMessages} onStatusChange={handleProStatus} onSendMessage={handleProMsg} onFinish={handleJobFinish} onCancelled={() => { resetMarketplace(); setScreen("dashboard"); }} onBack={() => setScreen("dashboard")} />;
   if (screen === "done") return <ProJobDone clientRating={clientRating} onHome={() => { resetMarketplace(); setScreen("dashboard"); }} />;
   return null;
 }
