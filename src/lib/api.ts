@@ -65,6 +65,29 @@ export async function getProfessionalById(id: string): Promise<ProUser> {
   return rowToProUser(data);
 }
 
+// Suscribe a la ubicación GPS en vivo de un profesional (mientras está
+// "Online" su navegador la va actualizando — ver useWatchPosition/
+// updateMyPresence). Usado por el cliente en seguimiento para ver al
+// profesional acercarse en el mapa en tiempo real, no una foto fija de
+// cuando aceptó. RLS ya permite leer cualquier profesional "active".
+export function subscribeToProfessionalLocation(professionalId: string, onChange: (location: GeoPoint) => void): () => void {
+  if (config.MOCK_MODE) return () => {};
+  const channel = supabase
+    .channel(`pro-location-${professionalId}`)
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "professionals", filter: `id=eq.${professionalId}` },
+      (payload) => {
+        const row = payload.new as any;
+        if (row.location_lat != null && row.location_lng != null) {
+          onChange({ lat: row.location_lat, lng: row.location_lng });
+        }
+      },
+    )
+    .subscribe();
+  return () => { supabase.removeChannel(channel); };
+}
+
 // Actualiza la disponibilidad ("Online"/"Offline") y, si está disponible,
 // la ubicación GPS real del profesional autenticado.
 export async function updateMyPresence(input: { isOnline: boolean; location?: GeoPoint }): Promise<void> {

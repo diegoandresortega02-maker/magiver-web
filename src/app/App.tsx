@@ -31,7 +31,7 @@ import {
   getActiveRequestForProfessional, subscribeToRequestChanges, updateMyPresence,
   getProfessionalById, subscribeToJobChanges, acceptServiceRequest, rejectServiceRequest,
   cancelActiveJob, getAvailableOffersForProfessional, subscribeToAvailableOffers, getRejectedRequestIds,
-  getJobById, savePushSubscription,
+  getJobById, savePushSubscription, subscribeToProfessionalLocation,
 } from "@/lib/api";
 import type { ProReasonCode, ClientReasonCode } from "@/lib/api";
 import type { PendingVerification, ProUser as ApiProUser, AdminStats, ChatMessage, ServiceRequest as ApiServiceRequest, GeoPoint } from "@/lib/types";
@@ -643,6 +643,26 @@ function loadGoogleMaps(apiKey: string): Promise<void> {
     document.head.appendChild(script);
   });
   return googleMapsPromise;
+}
+
+// Convierte coordenadas GPS reales en una dirección legible (como al pedir
+// comida: se detecta la ubicación sola, pero se puede editar después).
+// Usa el Geocoder de la propia librería de Google Maps (no el endpoint REST
+// directo) porque la clave tiene restricción de "HTTP referrer" — necesaria
+// para el mapa — y esa restricción hace que el endpoint REST puro rechace
+// la clave con "REQUEST_DENIED". El Geocoder de la librería JS sí respeta
+// la restricción de referrer correctamente.
+async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
+  if (!config.MAPS_API_KEY) return null;
+  try {
+    await loadGoogleMaps(config.MAPS_API_KEY);
+    const g = (window as any).google;
+    const geocoder = new g.maps.Geocoder();
+    const result = await geocoder.geocode({ location: { lat, lng } });
+    return result?.results?.[0]?.formatted_address ?? null;
+  } catch {
+    return null;
+  }
 }
 
 interface MapMarker { id: string; lat: number; lng: number; label: string; color?: string; labelColor?: string }
@@ -1552,8 +1572,21 @@ function ClientMap({ service, clientLocation, onRequest, onBack }: { service: st
 // ─── CLIENT REQUEST ───────────────────────────────────────────────────────────
 function ClientRequest({ service, clientLocation, onSubmit, onBack }: { service: string; clientLocation?: GeoPoint | null; onSubmit: (req: ServiceRequest) => void; onBack: () => void }) {
   const [desc, setDesc] = useState(""); const [addr, setAddr] = useState("Calle Los Pinos #342, Equipetrol");
+  const [addrEdited, setAddrEdited] = useState(false);
+  const [detectingAddr, setDetectingAddr] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  // Detecta la dirección real a partir del GPS (como al pedir comida) — el
+  // usuario la puede editar después si pide el servicio para otro lugar.
+  useEffect(() => {
+    if (!clientLocation || addrEdited) return;
+    let active = true;
+    setDetectingAddr(true);
+    reverseGeocode(clientLocation.lat, clientLocation.lng).then(address => {
+      if (active && address) setAddr(address);
+    }).finally(() => { if (active) setDetectingAddr(false); });
+    return () => { active = false; };
+  }, [clientLocation?.lat, clientLocation?.lng]);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!desc) return;
@@ -1594,7 +1627,12 @@ function ClientRequest({ service, clientLocation, onSubmit, onBack }: { service:
           </div>
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: NAVY }}>Dirección</label>
-            <div className="relative"><MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" /><input type="text" value={addr} onChange={e => setAddr(e.target.value)} className="w-full pl-9 pr-4 py-3 rounded-xl border text-sm outline-none bg-white" style={{ borderColor: "#E5E7EB", color: NAVY }} required /></div>
+            <div className="relative">
+              <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input type="text" value={addr} onChange={e => { setAddr(e.target.value); setAddrEdited(true); }} className="w-full pl-9 pr-4 py-3 rounded-xl border text-sm outline-none bg-white" style={{ borderColor: "#E5E7EB", color: NAVY }} required />
+              {detectingAddr && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 animate-spin" />}
+            </div>
+            <p className="text-xs text-slate-400 mt-1">{clientLocation ? "Detectada con tu GPS — puedes editarla si el servicio es para otro lugar." : "Escribe la dirección exacta."}</p>
           </div>
           <div className="p-4 rounded-xl border" style={{ background: "#FFFBEB", borderColor: "#FDE68A" }}>
             <div className="flex items-start gap-2"><MessageSquare className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" /><p className="text-xs text-amber-700 leading-relaxed">El precio se coordina directamente entre tú y el profesional a través del chat.</p></div>
@@ -1688,8 +1726,17 @@ function ClientTracking({ pro, request, jobStatus, messages, clientLocation, onS
   const [showCancel, setShowCancel] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState("");
+  const [liveProLocation, setLiveProLocation] = useState<GeoPoint | null>(pro.location ?? null);
   const chatRef = useRef<HTMLDivElement>(null);
   useEffect(() => { chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: "smooth" }); }, [messages]);
+  // Ubicación del profesional en vivo mientras viene en camino/está en sitio
+  // (no una foto fija de cuando aceptó la solicitud).
+  useEffect(() => {
+    setLiveProLocation(pro.location ?? null);
+    if (config.MOCK_MODE) return;
+    const unsubscribe = subscribeToProfessionalLocation(pro.id, setLiveProLocation);
+    return unsubscribe;
+  }, [pro.id]);
   const handleCancel = async (reasonCode: string, reasonText?: string) => {
     setCancelling(true); setCancelError("");
     try {
@@ -1728,7 +1775,7 @@ function ClientTracking({ pro, request, jobStatus, messages, clientLocation, onS
               <LiveMap
                 markers={[
                   ...(clientLocation ? [{ id: "yo", lat: clientLocation.lat, lng: clientLocation.lng, label: "Tú", color: LIME, labelColor: NAVY }] : []),
-                  ...(pro.location ? [{ id: pro.id, lat: pro.location.lat, lng: pro.location.lng, label: pro.initials, color: pro.color }] : []),
+                  ...(liveProLocation ? [{ id: pro.id, lat: liveProLocation.lat, lng: liveProLocation.lng, label: pro.initials, color: pro.color }] : []),
                 ]}
                 fallback={<MapView animate jobStatus={jobStatus} selectedProId="1" />}
               />
