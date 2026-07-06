@@ -25,6 +25,12 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
+      // injectManifest (no generateSW) para poder tener un service worker
+      // propio (src/sw.ts) que maneje notificaciones push reales, además
+      // del precache normal.
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon-180x180.png'],
       manifest: {
@@ -42,12 +48,9 @@ export default defineConfig({
           { src: 'maskable-icon-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
-      workbox: {
-        // SPA con react-router: cualquier ruta que no matchee un asset cae a index.html
-        navigateFallback: '/index.html',
-      },
       devOptions: {
         enabled: true,
+        type: 'module',
       },
     }),
   ],

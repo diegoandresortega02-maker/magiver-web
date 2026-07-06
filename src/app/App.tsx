@@ -31,7 +31,7 @@ import {
   getActiveRequestForProfessional, subscribeToRequestChanges, updateMyPresence,
   getProfessionalById, subscribeToJobChanges, acceptServiceRequest, rejectServiceRequest,
   cancelActiveJob, getAvailableOffersForProfessional, subscribeToAvailableOffers, getRejectedRequestIds,
-  getJobById,
+  getJobById, savePushSubscription,
 } from "@/lib/api";
 import type { ProReasonCode, ClientReasonCode } from "@/lib/api";
 import type { PendingVerification, ProUser as ApiProUser, AdminStats, ChatMessage, ServiceRequest as ApiServiceRequest, GeoPoint } from "@/lib/types";
@@ -215,6 +215,35 @@ function haversineKm(a: GeoPoint, b: GeoPoint): number {
   const dLng = (b.lng - a.lng) * Math.PI / 180;
   const s = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
+}
+
+// Notificaciones push reales (funcionan con el navegador cerrado). Se llama
+// en un momento con contexto claro para el usuario (justo al enviar su
+// primera solicitud, o al ponerse "Online" por primera vez), no al cargar
+// la página — los navegadores penalizan pedir el permiso sin esa razón.
+function urlBase64ToUint8Array(base64: string): Uint8Array {
+  const padding = "=".repeat((4 - (base64.length % 4)) % 4);
+  const base64Safe = (base64 + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64Safe);
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+
+async function subscribeToPushNotifications() {
+  try {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window) || !config.VAPID_PUBLIC_KEY) return;
+    let permission = Notification.permission;
+    if (permission === "default") permission = await Notification.requestPermission();
+    if (permission !== "granted") return;
+    const reg = await navigator.serviceWorker.ready;
+    const existing = await reg.pushManager.getSubscription();
+    const sub = existing ?? await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(config.VAPID_PUBLIC_KEY),
+    });
+    await savePushSubscription(sub.toJSON());
+  } catch {
+    // Falla silenciosa: es una mejora, no debe romper el flujo principal.
+  }
 }
 
 // Ubicación GPS real del navegador, una sola vez (para el cliente al pedir un servicio).
@@ -1542,6 +1571,7 @@ function ClientRequest({ service, clientLocation, onSubmit, onBack }: { service:
         category: categoryId, description: desc,
         address: { street: addr, zone: "", city: "Santa Cruz de la Sierra", lat: location.lat, lng: location.lng },
       });
+      subscribeToPushNotifications();
       onSubmit({ id: real.id, service, description: desc, address: addr, lat: location.lat, lng: location.lng });
     } catch (err: any) {
       setError(err?.message || "No se pudo enviar la solicitud. Intenta de nuevo.");
@@ -3118,6 +3148,11 @@ function ProfesionalPortal() {
     if (config.MOCK_MODE || !proUser?.id) return;
     updateMyPresence({ isOnline: available, location: proPosition ?? undefined }).catch(() => {});
   }, [available, proPosition, proUser?.id]);
+  const handleToggleAvailable = () => {
+    const goingOnline = !available;
+    setAvailable(goingOnline);
+    if (goingOnline) subscribeToPushNotifications();
+  };
 
   // La "bolsa" de solicitudes disponibles (pending, sin asignar) en la
   // categoría del profesional — solo mientras no tiene ya un trabajo activo.
@@ -3205,7 +3240,7 @@ function ProfesionalPortal() {
   if (screen === "documents") return <ProDocuments user={proUser!} onSubmit={handleDocSubmit} onBack={() => setScreen("register")} />;
   if (screen === "docview") return <ProDocuments user={proUser!} onSubmit={() => {}} onBack={() => setScreen("profile")} viewOnly docs={proDocuments ?? undefined} />;
   if (screen === "verify") return <ProVerify user={proUser!} onOpenAdmin={() => navigate("/admin")} />;
-  if (screen === "dashboard") return <ProDashboard user={proUser!} jobStatus={jobStatus} activeRequest={activeRequest} availableOffers={visibleOffers} available={available} onToggleAvailable={() => setAvailable(a => !a)} onViewRequest={() => setScreen("job")} onViewOffer={offer => { setSelectedOffer(offer); setScreen("request"); }} onProfile={() => setScreen("profile")} onDocuments={() => setScreen("docview")} onLogout={() => { setProUser(null); navigate("/"); }} />;
+  if (screen === "dashboard") return <ProDashboard user={proUser!} jobStatus={jobStatus} activeRequest={activeRequest} availableOffers={visibleOffers} available={available} onToggleAvailable={handleToggleAvailable} onViewRequest={() => setScreen("job")} onViewOffer={offer => { setSelectedOffer(offer); setScreen("request"); }} onProfile={() => setScreen("profile")} onDocuments={() => setScreen("docview")} onLogout={() => { setProUser(null); navigate("/"); }} />;
   if (screen === "profile") return <ProProfile user={proUser!} onSave={u => { setProUser(u); setScreen("dashboard"); }} onDocuments={() => setScreen("docview")} onBack={() => setScreen("dashboard")} />;
   if (screen === "request") return <ProRequestDetail request={selectedOffer ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} proLocation={proPosition} onAccepted={handleOfferAccepted} onRejected={handleOfferRejected} onBack={() => { setSelectedOffer(null); setScreen("dashboard"); }} />;
   if (screen === "job") return <ProActiveJob request={activeRequest ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} jobStatus={jobStatus} messages={chatMessages} onStatusChange={handleProStatus} onSendMessage={handleProMsg} onFinish={handleJobFinish} onCancelled={() => { resetMarketplace(); setScreen("dashboard"); }} onBack={() => setScreen("dashboard")} />;

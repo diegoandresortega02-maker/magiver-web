@@ -304,6 +304,30 @@ export function subscribeToJobChanges(requestId: string, onChange: (row: Service
   return () => { supabase.removeChannel(channel); };
 }
 
+// ─── Notificaciones push reales (funcionan con el navegador cerrado) ────────
+// El disparo real (enviar el push cuando un profesional acepta) lo hace un
+// trigger de Postgres + una Edge Function (send-accept-push) — ver migración
+// notify_request_accepted_trigger. Esto solo guarda/borra la suscripción del
+// navegador para que ese envío tenga a quién mandarle el push.
+
+export async function savePushSubscription(sub: PushSubscriptionJSON): Promise<void> {
+  if (config.MOCK_MODE || !sub.endpoint || !sub.keys) return;
+  const { data: userData } = await supabase.auth.getUser();
+  const userId = userData.user?.id;
+  if (!userId) return;
+  const { error } = await supabase.from("push_subscriptions").upsert(
+    { user_id: userId, endpoint: sub.endpoint, p256dh: sub.keys.p256dh, auth_key: sub.keys.auth },
+    { onConflict: "endpoint" },
+  );
+  if (error) throw { code: "db_error", message: error.message };
+}
+
+export async function deletePushSubscription(endpoint: string): Promise<void> {
+  if (config.MOCK_MODE) return;
+  const { error } = await supabase.from("push_subscriptions").delete().eq("endpoint", endpoint);
+  if (error) throw { code: "db_error", message: error.message };
+}
+
 // ─── Chat ────────────────────────────────────────────────────────────────────
 
 export async function getMessages(requestId: string): Promise<ChatMessage[]> {

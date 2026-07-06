@@ -15,6 +15,10 @@ export const config = {
   // TODO: agregar clave de Google Maps Platform
   MAPS_API_KEY: import.meta.env.VITE_MAPS_API_KEY ?? "",
 
+  // Web Push (notificaciones reales, funcionan con el navegador cerrado).
+  // Clave pública VAPID — segura de exponer en el cliente.
+  VAPID_PUBLIC_KEY: import.meta.env.VITE_VAPID_PUBLIC_KEY ?? "",
+
   // Firebase Cloud Messaging (push web + bridge con la app móvil)
   // TODO: configurar proyecto Firebase y agregar VAPID key
   FCM_VAPID_KEY: import.meta.env.VITE_FCM_VAPID_KEY ?? "",
