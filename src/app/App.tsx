@@ -28,9 +28,9 @@ import {
   getNearbyProfessionals, createServiceRequest, updateJobStatus, submitReview,
   uploadJobPhoto, getActiveProfessionals, getRejectedProfessionals, getAdminStats,
   getMessages, sendMessage, subscribeToMessages,
-  getActiveRequestForProfessional, subscribeToRequestChanges,
+  getActiveRequestForProfessional, subscribeToRequestChanges, updateMyPresence,
 } from "@/lib/api";
-import type { PendingVerification, ProUser as ApiProUser, AdminStats, ChatMessage, ServiceRequest as ApiServiceRequest } from "@/lib/types";
+import type { PendingVerification, ProUser as ApiProUser, AdminStats, ChatMessage, ServiceRequest as ApiServiceRequest, GeoPoint } from "@/lib/types";
 import {
   MapPin, Shield, Star, CheckCircle, ChevronDown, Menu, X,
   Zap, Droplets, Wind, Wrench, Paintbrush, MoreHorizontal,
@@ -188,14 +188,60 @@ function specialtyLabel(value: string): string {
   return SERVICES.find(s => s.id === value)?.label ?? value;
 }
 
+// Distancia real entre dos puntos GPS (fórmula de Haversine, en km).
+function haversineKm(a: GeoPoint, b: GeoPoint): number {
+  const R = 6371;
+  const dLat = (b.lat - a.lat) * Math.PI / 180;
+  const dLng = (b.lng - a.lng) * Math.PI / 180;
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
+}
+
+// Ubicación GPS real del navegador, una sola vez (para el cliente al pedir un servicio).
+function useGeolocation() {
+  const [position, setPosition] = useState<GeoPoint | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!navigator.geolocation) { setError("Tu navegador no soporta geolocalización."); return; }
+    navigator.geolocation.getCurrentPosition(
+      pos => setPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      err => setError(err.message),
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  }, []);
+  return { position, error };
+}
+
+// Ubicación GPS real en vivo mientras `active` es true (para el profesional
+// mientras está Online).
+function useWatchPosition(active: boolean) {
+  const [position, setPosition] = useState<GeoPoint | null>(null);
+  useEffect(() => {
+    if (!active || !navigator.geolocation) return;
+    const watchId = navigator.geolocation.watchPosition(
+      pos => setPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => {},
+      { enableHighAccuracy: true },
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [active]);
+  return position;
+}
+
 // Convierte un profesional real (de getNearbyProfessionals) a la forma que
-// espera la UI del marketplace. distance/eta quedan como valores fijos —
-// el cálculo real por GPS todavía está pendiente (ver notas del proyecto).
+// espera la UI del marketplace. Si se conoce la ubicación real del cliente
+// y la del profesional, distance/eta se calculan de verdad (Haversine +
+// una velocidad promedio de ciudad); si no, quedan como estimado fijo.
 const PRO_COLORS = ["#3B82F6", "#8B5CF6", "#F59E0B", "#EF4444", "#06B6D4", "#EC4899"];
-function proUserToProfessional(u: ApiProUser, index: number): Professional {
+function proUserToProfessional(u: ApiProUser, index: number, clientLocation?: GeoPoint | null): Professional {
+  let distance = 1.2, eta = 15;
+  if (clientLocation && u.location) {
+    distance = Math.round(haversineKm(clientLocation, u.location) * 10) / 10;
+    eta = Math.max(5, Math.round((distance / 25) * 60)); // ~25 km/h en ciudad
+  }
   return {
     id: u.id, name: u.name, specialty: specialtyLabel(u.specialty), rating: u.rating,
-    reviews: u.reviewCount, distance: 1.2, eta: 15,
+    reviews: u.reviewCount, distance, eta,
     initials: u.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase(),
     color: PRO_COLORS[index % PRO_COLORS.length], verified: true, jobs: u.completedJobs, bio: u.bio,
   };
@@ -1226,7 +1272,7 @@ function ClientProfile({ user, onSave, onBack }: { user: ClientUser; onSave: (u:
 }
 
 // ─── CLIENT SERVICES ─────────────────────────────────────────────────────────
-function ClientServices({ user, onSelect, onProfile, onBack }: { user: ClientUser; onSelect: (s: string) => void; onProfile: () => void; onBack: () => void }) {
+function ClientServices({ user, clientLocation, onSelect, onProfile, onBack }: { user: ClientUser; clientLocation?: GeoPoint | null; onSelect: (s: string) => void; onProfile: () => void; onBack: () => void }) {
   return (
     <ScreenWrap>
       <AppHeader title="MAGIVER" onBack={onBack}
@@ -1236,8 +1282,8 @@ function ClientServices({ user, onSelect, onProfile, onBack }: { user: ClientUse
         <div className="mb-6"><h2 className="text-2xl font-black mb-1" style={{ color: NAVY }}>¿Qué necesitas, {user.name.split(" ")[0]}?</h2><p className="text-slate-500 text-sm">Selecciona el tipo de servicio</p></div>
         <div className="flex items-center gap-2 px-4 py-3 rounded-xl border mb-6 bg-white" style={{ borderColor: "#E5E7EB" }}>
           <MapPin className="w-4 h-4 flex-shrink-0" style={{ color: LIME }} />
-          <span className="text-sm text-slate-600 flex-1">Equipetrol, Santa Cruz de la Sierra</span>
-          <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: "#F0FDF4", color: "#16A34A" }}>GPS activo</span>
+          <span className="text-sm text-slate-600 flex-1">{clientLocation ? `${clientLocation.lat.toFixed(4)}, ${clientLocation.lng.toFixed(4)}` : "Santa Cruz de la Sierra (aprox.)"}</span>
+          <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: clientLocation ? "#F0FDF4" : "#FEF3C7", color: clientLocation ? "#16A34A" : "#B45309" }}>{clientLocation ? "GPS activo" : "Ubicación aprox."}</span>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {SERVICES.map(svc => (
@@ -1253,7 +1299,7 @@ function ClientServices({ user, onSelect, onProfile, onBack }: { user: ClientUse
 }
 
 // ─── CLIENT MAP ───────────────────────────────────────────────────────────────
-function ClientMap({ service, onRequest, onBack }: { service: string; onRequest: (pro: Professional) => void; onBack: () => void }) {
+function ClientMap({ service, clientLocation, onRequest, onBack }: { service: string; clientLocation?: GeoPoint | null; onRequest: (pro: Professional) => void; onBack: () => void }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showProfile, setShowProfile] = useState(false);
   const [professionals, setProfessionals] = useState<Professional[]>([]);
@@ -1264,13 +1310,14 @@ function ClientMap({ service, onRequest, onBack }: { service: string; onRequest:
   useEffect(() => {
     if (config.MOCK_MODE) { setProfessionals(PROFESSIONALS); setLoading(false); return; }
     const categoryId = SERVICES.find(s => s.label === service)?.id;
+    const location = clientLocation ?? { lat: -17.785, lng: -63.181 };
     setLoading(true);
     setLoadError("");
-    getNearbyProfessionals({ location: { lat: -17.785, lng: -63.181 }, category: categoryId as any })
-      .then(pros => setProfessionals(pros.map((p, i) => proUserToProfessional(p, i))))
+    getNearbyProfessionals({ location, category: categoryId as any })
+      .then(pros => setProfessionals(pros.map((p, i) => proUserToProfessional(p, i, location))))
       .catch((err: any) => setLoadError(err?.message || "No se pudieron cargar los profesionales."))
       .finally(() => setLoading(false));
-  }, [service]);
+  }, [service, clientLocation]);
 
   return (
     <ScreenWrap>
@@ -1336,7 +1383,7 @@ function ClientMap({ service, onRequest, onBack }: { service: string; onRequest:
 }
 
 // ─── CLIENT REQUEST ───────────────────────────────────────────────────────────
-function ClientRequest({ service, pro, onSubmit, onBack }: { service: string; pro: Professional; onSubmit: (req: ServiceRequest) => void; onBack: () => void }) {
+function ClientRequest({ service, pro, clientLocation, onSubmit, onBack }: { service: string; pro: Professional; clientLocation?: GeoPoint | null; onSubmit: (req: ServiceRequest) => void; onBack: () => void }) {
   const [desc, setDesc] = useState(""); const [addr, setAddr] = useState("Calle Los Pinos #342, Equipetrol");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -1352,9 +1399,10 @@ function ClientRequest({ service, pro, onSubmit, onBack }: { service: string; pr
         return;
       }
       const categoryId = (SERVICES.find(s => s.label === service)?.id ?? "otro") as any;
+      const location = clientLocation ?? { lat: -17.785, lng: -63.181 };
       const real = await createServiceRequest({
         professionalId: pro.id, category: categoryId, description: desc,
-        address: { street: addr, zone: "", city: "Santa Cruz de la Sierra", lat: -17.785, lng: -63.181 },
+        address: { street: addr, zone: "", city: "Santa Cruz de la Sierra", lat: location.lat, lng: location.lng },
       });
       onSubmit({ id: real.id, service, description: desc, address: addr, professionalId: pro.id });
     } catch (err: any) {
@@ -1974,12 +2022,12 @@ function ProVerify({ user, onOpenAdmin }: { user: ProUser; onOpenAdmin: () => vo
 }
 
 // ─── PRO DASHBOARD ────────────────────────────────────────────────────────────
-function ProDashboard({ user, jobStatus, activeRequest, onViewRequest, onProfile, onDocuments, onLogout, onSimulateRequest }: {
+function ProDashboard({ user, jobStatus, activeRequest, available, onToggleAvailable, onViewRequest, onProfile, onDocuments, onLogout, onSimulateRequest }: {
   user: ProUser; jobStatus: JobStatus; activeRequest: ServiceRequest | null;
+  available: boolean; onToggleAvailable: () => void;
   onViewRequest: () => void; onProfile: () => void; onDocuments: () => void;
   onLogout: () => void; onSimulateRequest: () => void;
 }) {
-  const [available, setAvailable] = useState(true);
   const hasIncoming = (jobStatus === "searching" || jobStatus === "matched") && activeRequest;
   const hasActiveJob = jobStatus === "en_camino" || jobStatus === "en_sitio";
   const recentJobs = [
@@ -2019,7 +2067,7 @@ function ProDashboard({ user, jobStatus, activeRequest, onViewRequest, onProfile
             </div>
             <div className="flex flex-col items-end gap-1">
               <span className="text-xs text-slate-400">{available ? "Online" : "Offline"}</span>
-              <button onClick={() => setAvailable(!available)}>
+              <button onClick={onToggleAvailable}>
                 {available ? <ToggleRight className="w-9 h-9" style={{ color: LIME }} /> : <ToggleLeft className="w-9 h-9 text-slate-500" />}
               </button>
             </div>
@@ -2699,6 +2747,7 @@ function ClientePortal() {
   } = useAppCtx();
   const realChat = useChatMessages(activeRequest?.id);
   const chatMessages = config.MOCK_MODE ? messages : realChat.messages;
+  const clientGeo = useGeolocation();
 
   const [screen, setScreen] = useState<CS>("auth");
   const [clientUser, setClientUser] = useState<ClientUser | null>(null);
@@ -2724,9 +2773,9 @@ function ClientePortal() {
 
   if (screen === "auth") return <ClientAuth onDone={u => { setClientUser(u); setScreen("services"); }} onBack={() => navigate("/")} />;
   if (screen === "profile") return <ClientProfile user={clientUser!} onSave={u => { setClientUser(u); setScreen("services"); }} onBack={() => setScreen("services")} />;
-  if (screen === "services") return <ClientServices user={clientUser!} onSelect={s => { setSelectedService(s); setScreen("map"); }} onProfile={() => setScreen("profile")} onBack={() => navigate("/")} />;
-  if (screen === "map") return <ClientMap service={selectedService} onRequest={p => { setSelectedPro(p); setScreen("request"); }} onBack={() => setScreen("services")} />;
-  if (screen === "request") return <ClientRequest service={selectedService} pro={selectedPro!} onSubmit={req => { setActiveRequest(req); setJobStatus("searching"); setScreen("searching"); }} onBack={() => setScreen("map")} />;
+  if (screen === "services") return <ClientServices user={clientUser!} clientLocation={clientGeo.position} onSelect={s => { setSelectedService(s); setScreen("map"); }} onProfile={() => setScreen("profile")} onBack={() => navigate("/")} />;
+  if (screen === "map") return <ClientMap service={selectedService} clientLocation={clientGeo.position} onRequest={p => { setSelectedPro(p); setScreen("request"); }} onBack={() => setScreen("services")} />;
+  if (screen === "request") return <ClientRequest service={selectedService} pro={selectedPro!} clientLocation={clientGeo.position} onSubmit={req => { setActiveRequest(req); setJobStatus("searching"); setScreen("searching"); }} onBack={() => setScreen("map")} />;
   if (screen === "searching") return <ClientSearching pro={selectedPro!} onMatched={handleMatched} />;
   if (screen === "tracking") return <ClientTracking pro={selectedPro!} request={activeRequest!} jobStatus={jobStatus} messages={chatMessages} onSendMessage={handleClientMsg} onComplete={() => setScreen("price")} onBack={() => setScreen("services")} />;
   if (screen === "price") return <ClientPricePaid pro={selectedPro!} requestId={activeRequest?.id} onDone={price => { setActiveRequest(activeRequest ? { ...activeRequest, agreedPrice: price } : activeRequest); setScreen("rate"); }} />;
@@ -2770,6 +2819,16 @@ function ProfesionalPortal() {
     });
     return () => { active = false; unsubscribe(); };
   }, [proUser?.id]);
+
+  // Ubicación GPS real del profesional mientras está "Online", guardada en
+  // professionals.location_lat/lng para que la distancia que ve el cliente
+  // sea real (ver proUserToProfessional/haversineKm).
+  const [available, setAvailable] = useState(true);
+  const proPosition = useWatchPosition(available);
+  useEffect(() => {
+    if (config.MOCK_MODE || !proUser?.id) return;
+    updateMyPresence({ isOnline: available, location: proPosition ?? undefined }).catch(() => {});
+  }, [available, proPosition, proUser?.id]);
 
   const handleProAccept = () => {
     setJobStatus("en_camino");
@@ -2835,7 +2894,7 @@ function ProfesionalPortal() {
   if (screen === "documents") return <ProDocuments user={proUser!} onSubmit={handleDocSubmit} onBack={() => setScreen("register")} />;
   if (screen === "docview") return <ProDocuments user={proUser!} onSubmit={() => {}} onBack={() => setScreen("profile")} viewOnly docs={proDocuments ?? undefined} />;
   if (screen === "verify") return <ProVerify user={proUser!} onOpenAdmin={() => navigate("/admin")} />;
-  if (screen === "dashboard") return <ProDashboard user={proUser!} jobStatus={jobStatus} activeRequest={activeRequest} onViewRequest={() => setScreen((jobStatus === "searching" || jobStatus === "matched") ? "request" : "job")} onProfile={() => setScreen("profile")} onDocuments={() => setScreen("docview")} onLogout={() => { setProUser(null); navigate("/"); }} onSimulateRequest={simulateRequest} />;
+  if (screen === "dashboard") return <ProDashboard user={proUser!} jobStatus={jobStatus} activeRequest={activeRequest} available={available} onToggleAvailable={() => setAvailable(a => !a)} onViewRequest={() => setScreen((jobStatus === "searching" || jobStatus === "matched") ? "request" : "job")} onProfile={() => setScreen("profile")} onDocuments={() => setScreen("docview")} onLogout={() => { setProUser(null); navigate("/"); }} onSimulateRequest={simulateRequest} />;
   if (screen === "profile") return <ProProfile user={proUser!} onSave={u => { setProUser(u); setScreen("dashboard"); }} onDocuments={() => setScreen("docview")} onBack={() => setScreen("dashboard")} />;
   if (screen === "request") return <ProRequestDetail request={activeRequest ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} onAccept={handleProAccept} onReject={handleProReject} onBack={() => setScreen("dashboard")} />;
   if (screen === "job") return <ProActiveJob request={activeRequest ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} jobStatus={jobStatus} messages={chatMessages} onStatusChange={handleProStatus} onSendMessage={handleProMsg} onFinish={handleJobFinish} onBack={() => setScreen("dashboard")} />;

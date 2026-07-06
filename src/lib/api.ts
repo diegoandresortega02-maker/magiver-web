@@ -65,6 +65,19 @@ export async function getProfessionalById(id: string): Promise<ProUser> {
   return rowToProUser(data);
 }
 
+// Actualiza la disponibilidad ("Online"/"Offline") y, si está disponible,
+// la ubicación GPS real del profesional autenticado.
+export async function updateMyPresence(input: { isOnline: boolean; location?: GeoPoint }): Promise<void> {
+  if (config.MOCK_MODE) return;
+  const { data: userData } = await supabase.auth.getUser();
+  const id = userData.user?.id;
+  if (!id) return;
+  const patch: Record<string, unknown> = { is_online: input.isOnline };
+  if (input.location) { patch.location_lat = input.location.lat; patch.location_lng = input.location.lng; }
+  const { error } = await supabase.from("professionals").update(patch).eq("id", id);
+  if (error) throw { code: "db_error", message: error.message };
+}
+
 // ─── Solicitudes de servicio ──────────────────────────────────────────────────
 
 export interface CreateRequestPayload {
