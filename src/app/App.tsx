@@ -136,13 +136,14 @@ interface Professional {
   id: string; name: string; specialty: string; rating: number;
   reviews: number; distance: number; eta: number;
   initials: string; color: string; verified: boolean; jobs: number; bio: string;
+  location?: GeoPoint;
 }
 
 interface Message { id: string; from: "client" | "pro"; text: string; time: string }
 interface ServiceRequest {
   service: string; description: string; address: string;
   id?: string; professionalId?: string; agreedPrice?: number; completionPhotoUrl?: string;
-  clientName?: string;
+  clientName?: string; lat?: number; lng?: number;
 }
 
 type JobStatus = "idle" | "searching" | "matched" | "en_camino" | "en_sitio" | "completado";
@@ -241,7 +242,7 @@ function proUserToProfessional(u: ApiProUser, index: number, clientLocation?: Ge
   }
   return {
     id: u.id, name: u.name, specialty: specialtyLabel(u.specialty), rating: u.rating,
-    reviews: u.reviewCount, distance, eta,
+    reviews: u.reviewCount, distance, eta, location: u.location,
     initials: u.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase(),
     color: PRO_COLORS[index % PRO_COLORS.length], verified: true, jobs: u.completedJobs, bio: u.bio,
   };
@@ -267,6 +268,7 @@ function apiRequestToLocal(r: ApiServiceRequest & { clientName?: string }): Serv
     id: r.id, professionalId: r.professionalId, agreedPrice: r.agreedPrice, clientName: r.clientName,
     service: specialtyLabel(r.category), description: r.description,
     address: [r.address.street, r.address.zone].filter(Boolean).join(", "),
+    lat: r.address.coordinates?.lat, lng: r.address.coordinates?.lng,
   };
 }
 
@@ -527,6 +529,72 @@ function MapView({ selectedProId, onSelectPro, animate = false, jobStatus }: {
       </div>
     </div>
   );
+}
+
+// ─── Mapa real (Google Maps) ──────────────────────────────────────────────────
+// Carga el script de Google Maps una sola vez (cacheado en un módulo-level
+// promise) y renderiza marcadores reales. Si no hay clave configurada o no
+// hay coordenadas reales disponibles, el llamador debe usar MapView (arriba)
+// como respaldo — ver LiveMap.
+let googleMapsPromise: Promise<void> | null = null;
+function loadGoogleMaps(apiKey: string): Promise<void> {
+  if ((window as any).google?.maps) return Promise.resolve();
+  if (googleMapsPromise) return googleMapsPromise;
+  googleMapsPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}`;
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("No se pudo cargar Google Maps."));
+    document.head.appendChild(script);
+  });
+  return googleMapsPromise;
+}
+
+interface MapMarker { id: string; lat: number; lng: number; label: string; color?: string; labelColor?: string }
+
+function RealMap({ markers }: { markers: MapMarker[] }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [ready, setReady] = useState(false);
+  const [error, setError] = useState(false);
+  const markersKey = markers.map(m => `${m.id}:${m.lat.toFixed(5)},${m.lng.toFixed(5)}`).join("|");
+
+  useEffect(() => {
+    let cancelled = false;
+    loadGoogleMaps(config.MAPS_API_KEY)
+      .then(() => { if (!cancelled) setReady(true); })
+      .catch(() => { if (!cancelled) setError(true); });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!ready || !ref.current || markers.length === 0) return;
+    const g = (window as any).google;
+    const map = new g.maps.Map(ref.current, {
+      center: { lat: markers[0].lat, lng: markers[0].lng }, zoom: 14,
+      disableDefaultUI: true, zoomControl: true, clickableIcons: false,
+    });
+    const bounds = new g.maps.LatLngBounds();
+    markers.forEach(m => {
+      new g.maps.Marker({
+        position: { lat: m.lat, lng: m.lng }, map, title: m.label,
+        label: { text: m.label, color: m.labelColor ?? "#fff", fontWeight: "700", fontSize: "11px" },
+        icon: { path: g.maps.SymbolPath.CIRCLE, scale: 16, fillColor: m.color ?? NAVY, fillOpacity: 1, strokeColor: "#fff", strokeWeight: 2 },
+      });
+      bounds.extend({ lat: m.lat, lng: m.lng });
+    });
+    if (markers.length > 1) map.fitBounds(bounds, 48);
+  }, [ready, markersKey]);
+
+  if (error) return <MapView />;
+  return <div ref={ref} className="w-full rounded-2xl overflow-hidden" style={{ aspectRatio: "16/9", background: "#E8F5E9" }} />;
+}
+
+// Usa el mapa real cuando hay una clave de Google Maps configurada y al
+// menos una coordenada real; si no, cae al mapa decorativo de siempre.
+function LiveMap({ markers, fallback }: { markers: MapMarker[]; fallback?: React.ReactNode }) {
+  if (!config.MAPS_API_KEY || markers.length === 0) return <>{fallback ?? <MapView />}</>;
+  return <RealMap markers={markers} />;
 }
 
 // ─── Legal modal ─────────────────────────────────────────────────────────────
@@ -1323,7 +1391,12 @@ function ClientMap({ service, clientLocation, onRequest, onBack }: { service: st
     <ScreenWrap>
       <AppHeader title={service} onBack={onBack} />
       <div className="flex-1 overflow-y-auto">
-        <div className="p-4"><MapView /></div>
+        <div className="p-4">
+          <LiveMap markers={[
+            ...(clientLocation ? [{ id: "yo", lat: clientLocation.lat, lng: clientLocation.lng, label: "Tú", color: LIME, labelColor: NAVY }] : []),
+            ...professionals.filter(p => p.location).map(p => ({ id: p.id, lat: p.location!.lat, lng: p.location!.lng, label: p.initials, color: p.color })),
+          ]} />
+        </div>
         <div className="px-4 pb-4">
           {loading && <p className="text-sm text-slate-400 text-center py-8">Buscando profesionales cerca...</p>}
           {!loading && loadError && <p className="text-sm text-red-500 text-center py-8">{loadError}</p>}
@@ -1395,7 +1468,7 @@ function ClientRequest({ service, pro, clientLocation, onSubmit, onBack }: { ser
     try {
       if (config.MOCK_MODE) {
         await new Promise(r => setTimeout(r, 800));
-        onSubmit({ service, description: desc, address: addr, professionalId: pro.id });
+        onSubmit({ service, description: desc, address: addr, professionalId: pro.id, lat: clientLocation?.lat, lng: clientLocation?.lng });
         return;
       }
       const categoryId = (SERVICES.find(s => s.label === service)?.id ?? "otro") as any;
@@ -1404,7 +1477,7 @@ function ClientRequest({ service, pro, clientLocation, onSubmit, onBack }: { ser
         professionalId: pro.id, category: categoryId, description: desc,
         address: { street: addr, zone: "", city: "Santa Cruz de la Sierra", lat: location.lat, lng: location.lng },
       });
-      onSubmit({ id: real.id, service, description: desc, address: addr, professionalId: pro.id });
+      onSubmit({ id: real.id, service, description: desc, address: addr, professionalId: pro.id, lat: location.lat, lng: location.lng });
     } catch (err: any) {
       setError(err?.message || "No se pudo enviar la solicitud. Intenta de nuevo.");
     } finally {
@@ -1485,9 +1558,9 @@ function ClientSearching({ pro, onMatched }: { pro: Professional; onMatched: () 
 }
 
 // ─── CLIENT TRACKING ──────────────────────────────────────────────────────────
-function ClientTracking({ pro, request, jobStatus, messages, onSendMessage, onComplete, onBack }: {
+function ClientTracking({ pro, request, jobStatus, messages, clientLocation, onSendMessage, onComplete, onBack }: {
   pro: Professional; request: ServiceRequest; jobStatus: JobStatus;
-  messages: Message[]; onSendMessage: (text: string) => void;
+  messages: Message[]; clientLocation?: GeoPoint | null; onSendMessage: (text: string) => void;
   onComplete: () => void; onBack: () => void;
 }) {
   const [tab, setTab] = useState<"track" | "chat">("track");
@@ -1519,7 +1592,13 @@ function ClientTracking({ pro, request, jobStatus, messages, onSendMessage, onCo
           <div className="flex-1 overflow-y-auto p-4">
             <Card className="mb-4">
               <div className="flex items-center gap-3 mb-4"><ProAvatar pro={pro} /><div className="flex-1"><div className="flex items-center gap-1.5"><p className="font-bold" style={{ color: NAVY }}>{pro.name}</p><BadgeCheck className="w-4 h-4 text-blue-500" /></div><p className="text-xs text-slate-500">{pro.specialty}</p></div><StatusBadge status={jobStatus} /></div>
-              <MapView animate jobStatus={jobStatus} selectedProId="1" />
+              <LiveMap
+                markers={[
+                  ...(clientLocation ? [{ id: "yo", lat: clientLocation.lat, lng: clientLocation.lng, label: "Tú", color: LIME, labelColor: NAVY }] : []),
+                  ...(pro.location ? [{ id: pro.id, lat: pro.location.lat, lng: pro.location.lng, label: pro.initials, color: pro.color }] : []),
+                ]}
+                fallback={<MapView animate jobStatus={jobStatus} selectedProId="1" />}
+              />
             </Card>
             <Card className="mb-4">
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-4">Estado del servicio</p>
@@ -2201,15 +2280,17 @@ function ProProfile({ user, onSave, onDocuments, onBack }: { user: ProUser; onSa
 }
 
 // ─── PRO REQUEST ──────────────────────────────────────────────────────────────
-function ProRequestDetail({ request, onAccept, onReject, onBack }: { request: ServiceRequest; onAccept: () => void; onReject: () => void; onBack: () => void }) {
+function ProRequestDetail({ request, proLocation, onAccept, onReject, onBack }: { request: ServiceRequest; proLocation?: GeoPoint | null; onAccept: () => void; onReject: () => void; onBack: () => void }) {
   const [loading, setLoading] = useState(false);
+  const clientLoc = request.lat != null && request.lng != null ? { lat: request.lat, lng: request.lng } : null;
+  const realDistance = proLocation && clientLoc ? Math.round(haversineKm(proLocation, clientLoc) * 10) / 10 : null;
   return (
     <ScreenWrap>
       <AppHeader title="Nueva solicitud" onBack={onBack} />
       <div className="flex-1 overflow-y-auto p-5">
         <div className="mb-5 p-4 rounded-2xl border-2" style={{ borderColor: LIME, background: "#F7FEE7" }}>
           <div className="flex items-center gap-2 mb-1"><div className="w-2.5 h-2.5 rounded-full animate-ping" style={{ background: LIME }} /><span className="text-xs font-bold uppercase tracking-wider" style={{ color: "#4D7C0F" }}>Solicitud en tiempo real</span></div>
-          <p className="text-sm text-green-800">Cliente a <strong>1.0 km</strong> · El precio se coordina en el chat</p>
+          <p className="text-sm text-green-800">{realDistance != null ? <>Cliente a <strong>{realDistance} km</strong></> : "Cliente cerca de ti"} · El precio se coordina en el chat</p>
         </div>
         <Card className="mb-4">
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Detalles del servicio</p>
@@ -2229,7 +2310,15 @@ function ProRequestDetail({ request, onAccept, onReject, onBack }: { request: Se
             <div><p className="font-bold text-sm" style={{ color: NAVY }}>{request.clientName ?? "M. López"}</p><p className="text-xs text-slate-500">Cliente verificado</p></div>
           </div>
         </Card>
-        <div className="mb-5"><MapView selectedProId="1" /></div>
+        <div className="mb-5">
+          <LiveMap
+            markers={[
+              ...(clientLoc ? [{ id: "cliente", lat: clientLoc.lat, lng: clientLoc.lng, label: request.clientName?.slice(0, 2).toUpperCase() ?? "CL", color: "#8B5CF6" }] : []),
+              ...(proLocation ? [{ id: "yo", lat: proLocation.lat, lng: proLocation.lng, label: "Tú", color: LIME, labelColor: NAVY }] : []),
+            ]}
+            fallback={<MapView selectedProId="1" />}
+          />
+        </div>
         <div className="flex flex-col gap-3">
           <LimeBtn onClick={() => { setLoading(true); setTimeout(onAccept, 800); }} disabled={loading} className="w-full py-4 text-base">
             {loading ? <><Loader2 className="w-4 h-4 animate-spin" />Aceptando...</> : <>Aceptar solicitud <CheckCircle className="w-4 h-4" /></>}
@@ -2777,7 +2866,7 @@ function ClientePortal() {
   if (screen === "map") return <ClientMap service={selectedService} clientLocation={clientGeo.position} onRequest={p => { setSelectedPro(p); setScreen("request"); }} onBack={() => setScreen("services")} />;
   if (screen === "request") return <ClientRequest service={selectedService} pro={selectedPro!} clientLocation={clientGeo.position} onSubmit={req => { setActiveRequest(req); setJobStatus("searching"); setScreen("searching"); }} onBack={() => setScreen("map")} />;
   if (screen === "searching") return <ClientSearching pro={selectedPro!} onMatched={handleMatched} />;
-  if (screen === "tracking") return <ClientTracking pro={selectedPro!} request={activeRequest!} jobStatus={jobStatus} messages={chatMessages} onSendMessage={handleClientMsg} onComplete={() => setScreen("price")} onBack={() => setScreen("services")} />;
+  if (screen === "tracking") return <ClientTracking pro={selectedPro!} request={activeRequest!} jobStatus={jobStatus} messages={chatMessages} clientLocation={clientGeo.position} onSendMessage={handleClientMsg} onComplete={() => setScreen("price")} onBack={() => setScreen("services")} />;
   if (screen === "price") return <ClientPricePaid pro={selectedPro!} requestId={activeRequest?.id} onDone={price => { setActiveRequest(activeRequest ? { ...activeRequest, agreedPrice: price } : activeRequest); setScreen("rate"); }} />;
   if (screen === "rate") return <ClientRate pro={selectedPro!} requestId={activeRequest?.id} onSubmit={r => { setClientRating(r); setScreen("done"); }} />;
   if (screen === "done") return <ClientDone pro={selectedPro!} rating={clientRating ?? 0} onAgain={() => { reset(); setScreen("services"); }} onHome={() => { reset(); navigate("/"); }} />;
@@ -2896,7 +2985,7 @@ function ProfesionalPortal() {
   if (screen === "verify") return <ProVerify user={proUser!} onOpenAdmin={() => navigate("/admin")} />;
   if (screen === "dashboard") return <ProDashboard user={proUser!} jobStatus={jobStatus} activeRequest={activeRequest} available={available} onToggleAvailable={() => setAvailable(a => !a)} onViewRequest={() => setScreen((jobStatus === "searching" || jobStatus === "matched") ? "request" : "job")} onProfile={() => setScreen("profile")} onDocuments={() => setScreen("docview")} onLogout={() => { setProUser(null); navigate("/"); }} onSimulateRequest={simulateRequest} />;
   if (screen === "profile") return <ProProfile user={proUser!} onSave={u => { setProUser(u); setScreen("dashboard"); }} onDocuments={() => setScreen("docview")} onBack={() => setScreen("dashboard")} />;
-  if (screen === "request") return <ProRequestDetail request={activeRequest ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} onAccept={handleProAccept} onReject={handleProReject} onBack={() => setScreen("dashboard")} />;
+  if (screen === "request") return <ProRequestDetail request={activeRequest ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} proLocation={proPosition} onAccept={handleProAccept} onReject={handleProReject} onBack={() => setScreen("dashboard")} />;
   if (screen === "job") return <ProActiveJob request={activeRequest ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} jobStatus={jobStatus} messages={chatMessages} onStatusChange={handleProStatus} onSendMessage={handleProMsg} onFinish={handleJobFinish} onBack={() => setScreen("dashboard")} />;
   if (screen === "done") return <ProJobDone clientRating={clientRating} onHome={() => { resetMarketplace(); setScreen("dashboard"); }} />;
   return null;

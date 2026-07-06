@@ -91,7 +91,10 @@ function rowToServiceRequest(row: any): ServiceRequest {
   return {
     id: row.id, clientId: row.client_id, professionalId: row.professional_id ?? undefined,
     category: row.category, description: row.description ?? "",
-    address: { street: row.address_street ?? "", zone: row.address_zone ?? "", city: row.address_city ?? "" },
+    address: {
+      street: row.address_street ?? "", zone: row.address_zone ?? "", city: row.address_city ?? "",
+      coordinates: row.address_lat != null ? { lat: row.address_lat, lng: row.address_lng } : undefined,
+    },
     status: row.status, agreedPrice: row.agreed_price != null ? Number(row.agreed_price) : undefined,
     createdAt: row.created_at, updatedAt: row.updated_at, completedAt: row.completed_at ?? undefined,
   };
