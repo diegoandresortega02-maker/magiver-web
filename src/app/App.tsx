@@ -28,8 +28,9 @@ import {
   getNearbyProfessionals, createServiceRequest, updateJobStatus, submitReview,
   uploadJobPhoto, getActiveProfessionals, getRejectedProfessionals, getAdminStats,
   getMessages, sendMessage, subscribeToMessages,
+  getActiveRequestForProfessional, subscribeToRequestChanges,
 } from "@/lib/api";
-import type { PendingVerification, ProUser as ApiProUser, AdminStats, ChatMessage } from "@/lib/types";
+import type { PendingVerification, ProUser as ApiProUser, AdminStats, ChatMessage, ServiceRequest as ApiServiceRequest } from "@/lib/types";
 import {
   MapPin, Shield, Star, CheckCircle, ChevronDown, Menu, X,
   Zap, Droplets, Wind, Wrench, Paintbrush, MoreHorizontal,
@@ -141,6 +142,7 @@ interface Message { id: string; from: "client" | "pro"; text: string; time: stri
 interface ServiceRequest {
   service: string; description: string; address: string;
   id?: string; professionalId?: string; agreedPrice?: number; completionPhotoUrl?: string;
+  clientName?: string;
 }
 
 type JobStatus = "idle" | "searching" | "matched" | "en_camino" | "en_sitio" | "completado";
@@ -202,6 +204,24 @@ function proUserToProfessional(u: ApiProUser, index: number): Professional {
 function nowStr() {
   const d = new Date();
   return `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+// Convierte una solicitud real (de getActiveRequestForProfessional /
+// subscribeToRequestChanges) a la forma local que espera la UI del panel
+// profesional, y su estado de Postgres al JobStatus local usado en pantalla.
+function apiStatusToLocal(status: ApiServiceRequest["status"]): JobStatus {
+  if (status === "pending" || status === "accepted") return "matched";
+  if (status === "en_camino") return "en_camino";
+  if (status === "en_sitio" || status === "in_progress") return "en_sitio";
+  return "completado";
+}
+
+function apiRequestToLocal(r: ApiServiceRequest & { clientName?: string }): ServiceRequest {
+  return {
+    id: r.id, professionalId: r.professionalId, agreedPrice: r.agreedPrice, clientName: r.clientName,
+    service: specialtyLabel(r.category), description: r.description,
+    address: [r.address.street, r.address.zone].filter(Boolean).join(", "),
+  };
 }
 
 // ─── App Context (shared marketplace simulation state) ────────────────────────
@@ -2157,8 +2177,8 @@ function ProRequestDetail({ request, onAccept, onReject, onBack }: { request: Se
         <Card className="mb-4">
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Cliente</p>
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-full flex items-center justify-center font-bold text-white text-sm" style={{ background: "#8B5CF6" }}>ML</div>
-            <div><p className="font-bold text-sm" style={{ color: NAVY }}>M. López</p><p className="text-xs text-slate-500">Cliente verificado · 8 servicios</p><div className="flex items-center gap-1 mt-0.5"><Star className="w-3 h-3 fill-yellow-400 text-yellow-400" /><span className="text-xs text-slate-600">5.0 como cliente</span></div></div>
+            <div className="w-11 h-11 rounded-full flex items-center justify-center font-bold text-white text-sm" style={{ background: "#8B5CF6" }}>{(request.clientName ?? "M. López").split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}</div>
+            <div><p className="font-bold text-sm" style={{ color: NAVY }}>{request.clientName ?? "M. López"}</p><p className="text-xs text-slate-500">Cliente verificado</p></div>
           </div>
         </Card>
         <div className="mb-5"><MapView selectedProId="1" /></div>
@@ -2731,6 +2751,25 @@ function ProfesionalPortal() {
   const [screen, setScreen] = useState<PS>("auth");
   const [proUser, setProUser] = useState<ProUser | null>(null);
   const [proDocuments, setProDocuments] = useState<DocumentSet | null>(null);
+
+  // Muestra las solicitudes reales asignadas a este profesional (no depende
+  // de que cliente y profesional compartan la misma pestaña del navegador),
+  // y las mantiene sincronizadas en vivo vía Supabase Realtime.
+  useEffect(() => {
+    if (config.MOCK_MODE || !proUser?.id) return;
+    let active = true;
+    getActiveRequestForProfessional(proUser.id).then(req => {
+      if (!active || !req) return;
+      setActiveRequest(apiRequestToLocal(req));
+      setJobStatus(apiStatusToLocal(req.status));
+    }).catch(() => {});
+    const unsubscribe = subscribeToRequestChanges(proUser.id, req => {
+      if (req.status === "completed" || req.status === "rated" || req.status === "cancelled") return;
+      setActiveRequest(prev => ({ ...apiRequestToLocal(req), clientName: prev?.clientName }));
+      setJobStatus(apiStatusToLocal(req.status));
+    });
+    return () => { active = false; unsubscribe(); };
+  }, [proUser?.id]);
 
   const handleProAccept = () => {
     setJobStatus("en_camino");

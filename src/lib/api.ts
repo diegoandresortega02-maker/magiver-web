@@ -132,6 +132,47 @@ export async function getJobById(requestId: string): Promise<ServiceRequest> {
   return rowToServiceRequest(data);
 }
 
+// Solicitud activa más reciente asignada a un profesional (pendiente de
+// aceptar o ya en curso). Se usa para que el panel del profesional muestre
+// solicitudes reales sin depender de que cliente y profesional compartan
+// la misma pestaña del navegador.
+const ACTIVE_REQUEST_STATUSES: ApiJobStatus[] = ["pending", "accepted", "en_camino", "en_sitio", "in_progress"];
+
+export async function getActiveRequestForProfessional(
+  professionalId: string,
+): Promise<(ServiceRequest & { clientName?: string }) | null> {
+  if (config.MOCK_MODE) return null;
+  const { data, error } = await supabase
+    .from("service_requests")
+    .select("*, clients(name)")
+    .eq("professional_id", professionalId)
+    .in("status", ACTIVE_REQUEST_STATUSES)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw { code: "db_error", message: error.message };
+  if (!data) return null;
+  return { ...rowToServiceRequest(data), clientName: (data as any).clients?.name };
+}
+
+// Suscribe a los cambios (nuevas solicitudes y cambios de estado) de las
+// solicitudes asignadas a un profesional, vía Supabase Realtime.
+export function subscribeToRequestChanges(
+  professionalId: string,
+  onChange: (row: ServiceRequest) => void,
+): () => void {
+  if (config.MOCK_MODE) return () => {};
+  const channel = supabase
+    .channel(`pro-requests-${professionalId}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "service_requests", filter: `professional_id=eq.${professionalId}` },
+      (payload) => onChange(rowToServiceRequest(payload.new)),
+    )
+    .subscribe();
+  return () => { supabase.removeChannel(channel); };
+}
+
 // ─── Chat ────────────────────────────────────────────────────────────────────
 
 export async function getMessages(requestId: string): Promise<ChatMessage[]> {
