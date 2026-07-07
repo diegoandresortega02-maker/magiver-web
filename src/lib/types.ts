@@ -33,6 +33,7 @@ export interface ProUser extends BaseUser {
   location?: GeoPoint;
   isOnline: boolean;
   rejectionReason?: string;
+  homeAddress?: { street: string; zone: string; city: string }; // solo capturada en el registro, para verificación
 }
 
 export interface AdminUser extends BaseUser {

@@ -630,6 +630,24 @@ function MapView({ selectedProId, onSelectPro, animate = false, jobStatus }: {
 // promise) y renderiza marcadores reales. Si no hay clave configurada o no
 // hay coordenadas reales disponibles, el llamador debe usar MapView (arriba)
 // como respaldo — ver LiveMap.
+
+// Estilo minimalista tipo PedidosYa/Uber: sin íconos de negocios/POIs, sin
+// transporte público, calles simplificadas — reduce el "ruido" visual del
+// estilo por defecto de Google Maps.
+const MINIMAL_MAP_STYLE = [
+  { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
+  { featureType: "poi.business", stylers: [{ visibility: "off" }] },
+  { featureType: "poi.park", elementType: "labels.text", stylers: [{ visibility: "off" }] },
+  { featureType: "transit", stylers: [{ visibility: "off" }] },
+  { featureType: "road", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+  { featureType: "road", elementType: "geometry", stylers: [{ color: "#f1f5f9" }] },
+  { featureType: "road.arterial", elementType: "geometry", stylers: [{ color: "#e5e7eb" }] },
+  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#d1d5db" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#dbeafe" }] },
+  { featureType: "landscape", elementType: "geometry", stylers: [{ color: "#f8fafc" }] },
+  { featureType: "administrative", elementType: "labels.text.fill", stylers: [{ color: "#94a3b8" }] },
+];
+
 let googleMapsPromise: Promise<void> | null = null;
 function loadGoogleMaps(apiKey: string): Promise<void> {
   if ((window as any).google?.maps) return Promise.resolve();
@@ -694,7 +712,7 @@ function RealMap({ markers, zoom = 14, onMarkerDragEnd, onMapClick }: {
     const g = (window as any).google;
     const map = new g.maps.Map(ref.current, {
       center: { lat: markers[0].lat, lng: markers[0].lng }, zoom,
-      disableDefaultUI: true, zoomControl: true, clickableIcons: false,
+      disableDefaultUI: true, zoomControl: true, clickableIcons: false, styles: MINIMAL_MAP_STYLE,
     });
     const bounds = new g.maps.LatLngBounds();
     markers.forEach(m => {
@@ -2065,6 +2083,7 @@ function ProRegister({ onSubmit, onBack }: { onSubmit: (u: ProUser) => void; onB
   const [name, setName] = useState(""); const [phone, setPhone] = useState(""); const [email, setEmail] = useState("");
   const [pass, setPass] = useState(""); const [specialty, setSpecialty] = useState("");
   const [ci, setCi] = useState(""); const [yearsExp, setYearsExp] = useState(""); const [bio, setBio] = useState("");
+  const [homeStreet, setHomeStreet] = useState(""); const [homeZone, setHomeZone] = useState("");
   const [loading, setLoading] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [termsError, setTermsError] = useState(false);
@@ -2075,7 +2094,7 @@ function ProRegister({ onSubmit, onBack }: { onSubmit: (u: ProUser) => void; onB
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !phone || !specialty || !ci) return;
+    if (!name || !phone || !specialty || !ci || !homeStreet) return;
     let hasError = false;
     if (!termsAccepted) { setTermsError(true); hasError = true; }
     if (!declarationAccepted) { setDeclarationError(true); hasError = true; }
@@ -2091,6 +2110,7 @@ function ProRegister({ onSubmit, onBack }: { onSubmit: (u: ProUser) => void; onB
       const { id } = await apiRegisterProfessional({
         name, phone, email, password: pass,
         specialty: specialty as any, ci, yearsExp: parseInt(yearsExp) || 1, bio,
+        homeAddress: { street: homeStreet, zone: homeZone, city: "Santa Cruz de la Sierra" },
       });
       onSubmit({ id, name, phone, email, specialty, ci, yearsExp: parseInt(yearsExp) || 1, bio, status: "pending" } as ProUser);
     } catch (err: any) {
@@ -2115,6 +2135,10 @@ function ProRegister({ onSubmit, onBack }: { onSubmit: (u: ProUser) => void; onB
           <InputField label="Teléfono / WhatsApp" type="tel" placeholder="+591 7xxxxxxx" value={phone} onChange={setPhone} icon={<Phone className="w-4 h-4" />} />
           <InputField label="Correo electrónico" type="email" placeholder="tu@correo.com" value={email} onChange={setEmail} icon={<Mail className="w-4 h-4" />} />
           <InputField label="Contraseña" type="password" placeholder="Mínimo 6 caracteres" value={pass} onChange={setPass} />
+          <p className="text-xs font-bold uppercase tracking-wider" style={{ color: LIME }}>Dirección de tu vivienda</p>
+          <p className="text-xs text-slate-500 -mt-3">Se pide solo una vez, al registrarte, para tu verificación de identidad.</p>
+          <InputField label="Calle y número" placeholder="Ej. Calle Los Pinos #342" value={homeStreet} onChange={setHomeStreet} icon={<MapPin className="w-4 h-4" />} />
+          <InputField label="Zona / Barrio" placeholder="Ej. Equipetrol" value={homeZone} onChange={setHomeZone} icon={<MapPin className="w-4 h-4" />} />
           <p className="text-xs font-bold uppercase tracking-wider" style={{ color: LIME }}>Especialidad</p>
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: NAVY }}>Categoría principal</label>
@@ -2170,7 +2194,7 @@ function ProRegister({ onSubmit, onBack }: { onSubmit: (u: ProUser) => void; onB
             </p>
           )}
 
-          <LimeBtn type="submit" disabled={loading || !name || !phone || !specialty || !ci || !termsAccepted || !declarationAccepted} className="w-full py-4 text-base">
+          <LimeBtn type="submit" disabled={loading || !name || !phone || !specialty || !ci || !homeStreet || !termsAccepted || !declarationAccepted} className="w-full py-4 text-base">
             {loading ? <><Loader2 className="w-4 h-4 animate-spin" />Guardando...</> : <>Continuar a documentos <ArrowRight className="w-4 h-4" /></>}
           </LimeBtn>
         </form>
@@ -3041,6 +3065,9 @@ function AdminProReview({ record, onDone, onBack }: {
             <div><p className="text-xs text-slate-400">Email</p><p className="font-semibold" style={{ color: NAVY }}>{record.professional.email}</p></div>
             <div><p className="text-xs text-slate-400">CI</p><p className="font-semibold" style={{ color: NAVY }}>{record.professional.ci}</p></div>
             <div><p className="text-xs text-slate-400">Experiencia</p><p className="font-semibold" style={{ color: NAVY }}>{record.professional.yearsExp} años</p></div>
+            {record.professional.homeAddress && (
+              <div className="col-span-2"><p className="text-xs text-slate-400">Dirección de vivienda (declarada)</p><p className="font-semibold" style={{ color: NAVY }}>{record.professional.homeAddress.street}{record.professional.homeAddress.zone ? `, ${record.professional.homeAddress.zone}` : ""}</p></div>
+            )}
             <div className="col-span-2"><p className="text-xs text-slate-400 mb-1">Bio</p><p className="text-sm text-slate-600 leading-relaxed">{record.professional.bio || "Sin descripción"}</p></div>
           </div>
         </Card>

@@ -30,6 +30,7 @@ function rowToProUser(row: any, email = ""): ProUser {
     location: row.location_lat != null ? { lat: row.location_lat, lng: row.location_lng } : undefined,
     createdAt: row.created_at,
     rejectionReason: row.rejection_reason ?? undefined,
+    homeAddress: row.home_address_street ? { street: row.home_address_street, zone: row.home_address_zone ?? "", city: row.home_address_city ?? "" } : undefined,
   };
 }
 
@@ -431,6 +432,8 @@ export async function submitReview(data: {
 export interface RegisterProPayload {
   name: string; phone: string; email: string; password: string;
   specialty: ServiceCategory; ci: string; yearsExp: number; bio: string;
+  // Dirección de vivienda — solo se pide una vez, en el registro, para verificación.
+  homeAddress: { street: string; zone: string; city: string };
 }
 
 export async function registerProfessional(payload: RegisterProPayload): Promise<{ id: string }> {
@@ -443,6 +446,8 @@ export async function registerProfessional(payload: RegisterProPayload): Promise
   const { error } = await supabase.from("professionals").insert({
     id: userId, name: payload.name, phone: payload.phone, specialty: payload.specialty,
     ci: payload.ci, years_exp: payload.yearsExp, bio: payload.bio, status: "pending",
+    home_address_street: payload.homeAddress.street, home_address_zone: payload.homeAddress.zone,
+    home_address_city: payload.homeAddress.city,
   });
   if (error) throw { code: "db_error", message: error.message };
   return { id: userId };
