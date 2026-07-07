@@ -32,7 +32,9 @@ import {
   getProfessionalById, subscribeToJobChanges, acceptServiceRequest, rejectServiceRequest,
   cancelActiveJob, getAvailableOffersForProfessional, subscribeToAvailableOffers, getRejectedRequestIds,
   getJobById, savePushSubscription, subscribeToProfessionalLocation,
+  getRecentJobsForProfessional, getClientRequestCount,
 } from "@/lib/api";
+import type { RecentJob } from "@/lib/api";
 import type { ProReasonCode, ClientReasonCode } from "@/lib/api";
 import type { PendingVerification, ProUser as ApiProUser, AdminStats, ChatMessage, ServiceRequest as ApiServiceRequest, GeoPoint } from "@/lib/types";
 import {
@@ -121,13 +123,14 @@ function LogoIcon({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
 }
 
 // ─── Types ──────────────────────────────────────────────────────────────────
-interface ClientUser { name: string; phone: string; email: string }
+interface ClientUser { id?: string; name: string; phone: string; email: string; createdAt?: string }
 
 interface ProUser {
   id?: string;
   name: string; phone: string; email: string;
   specialty: string; ci: string;
   yearsExp: number; bio: string;
+  rating?: number; reviewCount?: number; completedJobs?: number;
   status: "pending" | "active" | "rejected";
 }
 
@@ -1462,6 +1465,14 @@ function ClientAuth({ onDone, onBack }: { onDone: (u: ClientUser) => void; onBac
 function ClientProfile({ user, onSave, onBack }: { user: ClientUser; onSave: (u: ClientUser) => void; onBack: () => void }) {
   const [name, setName] = useState(user.name); const [phone, setPhone] = useState(user.phone); const [email, setEmail] = useState(user.email);
   const [saved, setSaved] = useState(false);
+  const [requestCount, setRequestCount] = useState<number | null>(null);
+  useEffect(() => {
+    if (config.MOCK_MODE || !user.id) return;
+    getClientRequestCount(user.id).then(setRequestCount).catch(() => {});
+  }, [user.id]);
+  const memberSince = user.createdAt
+    ? new Date(user.createdAt).toLocaleDateString("es-BO", { month: "long", year: "numeric" })
+    : null;
   return (
     <ScreenWrap>
       <AppHeader title="Mi perfil" onBack={onBack} />
@@ -1473,7 +1484,7 @@ function ClientProfile({ user, onSave, onBack }: { user: ClientUser; onSave: (u:
           <p className="font-bold text-lg" style={{ color: NAVY }}>{name}</p>
           <span className="text-xs font-semibold px-2.5 py-1 rounded-full mt-1" style={{ background: "#F0FDF4", color: "#16A34A" }}>Cliente MAGIVER</span>
         </div>
-        <form onSubmit={e => { e.preventDefault(); onSave({ name, phone, email }); setSaved(true); setTimeout(() => setSaved(false), 2000); }} className="flex flex-col gap-5">
+        <form onSubmit={e => { e.preventDefault(); onSave({ ...user, name, phone, email }); setSaved(true); setTimeout(() => setSaved(false), 2000); }} className="flex flex-col gap-5">
           <p className="text-xs font-bold uppercase tracking-wider" style={{ color: LIME }}>Datos personales</p>
           <InputField label="Nombre completo" placeholder="Tu nombre" value={name} onChange={setName} icon={<User className="w-4 h-4" />} />
           <InputField label="Teléfono / WhatsApp" type="tel" placeholder="+591 7xxxxxxx" value={phone} onChange={setPhone} icon={<Phone className="w-4 h-4" />} />
@@ -1484,8 +1495,8 @@ function ClientProfile({ user, onSave, onBack }: { user: ClientUser; onSave: (u:
         </form>
         <Card className="mt-6">
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Historial de cuenta</p>
-          <div className="flex justify-between text-sm mb-2"><span className="text-slate-500">Servicios solicitados</span><span className="font-semibold" style={{ color: NAVY }}>4</span></div>
-          <div className="flex justify-between text-sm"><span className="text-slate-500">Miembro desde</span><span className="font-semibold" style={{ color: NAVY }}>Jun 2025</span></div>
+          <div className="flex justify-between text-sm mb-2"><span className="text-slate-500">Servicios solicitados</span><span className="font-semibold" style={{ color: NAVY }}>{requestCount ?? "—"}</span></div>
+          <div className="flex justify-between text-sm"><span className="text-slate-500">Miembro desde</span><span className="font-semibold" style={{ color: NAVY }}>{memberSince ?? "—"}</span></div>
         </Card>
       </div>
     </ScreenWrap>
@@ -2365,19 +2376,15 @@ function ProVerify({ user, onOpenAdmin }: { user: ProUser; onOpenAdmin: () => vo
 }
 
 // ─── PRO DASHBOARD ────────────────────────────────────────────────────────────
-function ProDashboard({ user, jobStatus, activeRequest, availableOffers, available, onToggleAvailable, onViewRequest, onViewOffer, onProfile, onDocuments, onLogout }: {
+function ProDashboard({ user, jobStatus, activeRequest, availableOffers, recentJobs, available, onToggleAvailable, onViewRequest, onViewOffer, onProfile, onDocuments, onLogout }: {
   user: ProUser; jobStatus: JobStatus; activeRequest: ServiceRequest | null; availableOffers: ServiceRequest[];
+  recentJobs: RecentJob[];
   available: boolean; onToggleAvailable: () => void;
   onViewRequest: () => void; onViewOffer: (offer: ServiceRequest) => void; onProfile: () => void; onDocuments: () => void;
   onLogout: () => void;
 }) {
   const hasIncoming = availableOffers.length > 0;
   const hasActiveJob = jobStatus === "matched" || jobStatus === "en_camino" || jobStatus === "en_sitio";
-  const recentJobs = [
-    { name: "María López", service: "Instalación tomacorriente", date: "Hoy, 09:15", rating: 5 },
-    { name: "Juan Quispe", service: "Revisión tablero eléctrico", date: "Ayer, 14:30", rating: 5 },
-    { name: "Rosa Mamani", service: "Cambio de foco y cableado", date: "Lun, 11:00", rating: 4 },
-  ];
   return (
     <ScreenWrap>
       <div style={{ background: NAVY }} className="flex-shrink-0">
@@ -2402,7 +2409,7 @@ function ProDashboard({ user, jobStatus, activeRequest, availableOffers, availab
               <p className="text-slate-400 text-sm">{specialtyLabel(user.specialty)} · {user.yearsExp} años exp.</p>
               <div className="flex items-center gap-1 mt-0.5">
                 <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-                <span className="text-xs text-slate-300">4.9 · 47 reseñas</span>
+                <span className="text-xs text-slate-300">{(user.rating ?? 0).toFixed(1)} · {user.reviewCount ?? 0} reseñas</span>
                 <span className="mx-1 text-slate-600">·</span>
                 <BadgeCheck className="w-3 h-3 text-blue-400" />
                 <span className="text-xs text-blue-300">Verificado</span>
@@ -2416,7 +2423,7 @@ function ProDashboard({ user, jobStatus, activeRequest, availableOffers, availab
             </div>
           </div>
           <div className="grid grid-cols-3 gap-3">
-            {[["134", "Trabajos"], ["4.9", "Calificación"], ["8 años", "Experiencia"]].map(([v, l]) => (
+            {[[String(user.completedJobs ?? 0), "Trabajos"], [(user.rating ?? 0).toFixed(1), "Calificación"], [`${user.yearsExp} años`, "Experiencia"]].map(([v, l]) => (
               <div key={l} className="p-3 rounded-xl text-center" style={{ background: "rgba(255,255,255,0.1)" }}>
                 <p className="font-black text-white text-sm">{v}</p><p className="text-xs text-slate-400">{l}</p>
               </div>
@@ -2473,20 +2480,24 @@ function ProDashboard({ user, jobStatus, activeRequest, availableOffers, availab
           </button>
         </div>
         <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Trabajos recientes</p>
-        <div className="flex flex-col gap-3">
-          {recentJobs.map((job, i) => (
-            <Card key={i}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-semibold text-sm" style={{ color: NAVY }}>{job.service}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">{job.name} · {job.date}</p>
-                  <div className="flex items-center gap-1 mt-1">{[...Array(job.rating)].map((_, j) => <Star key={j} className="w-3 h-3 fill-yellow-400 text-yellow-400" />)}</div>
+        {recentJobs.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-4">Todavía no tienes trabajos completados.</p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {recentJobs.map(job => (
+              <Card key={job.id}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-semibold text-sm" style={{ color: NAVY }}>{specialtyLabel(job.category)}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">{job.clientName} · {new Date(job.completedAt).toLocaleDateString("es-BO", { day: "numeric", month: "short" })}</p>
+                    {job.rating != null && <div className="flex items-center gap-1 mt-1">{[...Array(job.rating)].map((_, j) => <Star key={j} className="w-3 h-3 fill-yellow-400 text-yellow-400" />)}</div>}
+                  </div>
+                  <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
                 </div>
-                <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
-              </div>
-            </Card>
-          ))}
-        </div>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
     </ScreenWrap>
   );
@@ -3294,6 +3305,13 @@ function ProfesionalPortal() {
     return () => { active = false; unsubscribe(); };
   }, [proUser?.id, proUser?.specialty, !!activeRequest]);
 
+  // Trabajos reales ya completados (antes era una lista de ejemplo inventada).
+  const [recentJobs, setRecentJobs] = useState<RecentJob[]>([]);
+  useEffect(() => {
+    if (config.MOCK_MODE || !proUser?.id) return;
+    getRecentJobsForProfessional(proUser.id).then(setRecentJobs).catch(() => {});
+  }, [proUser?.id, jobStatus]);
+
   // El radio se filtra acá (haversine), no en la consulta — Realtime solo
   // puede filtrar por columnas simples (ver subscribeToAvailableOffers).
   const visibleOffers = availableOffers.filter(o => {
@@ -3358,7 +3376,7 @@ function ProfesionalPortal() {
   if (screen === "documents") return <ProDocuments user={proUser!} onSubmit={handleDocSubmit} onBack={() => setScreen("register")} />;
   if (screen === "docview") return <ProDocuments user={proUser!} onSubmit={() => {}} onBack={() => setScreen("profile")} viewOnly docs={proDocuments ?? undefined} />;
   if (screen === "verify") return <ProVerify user={proUser!} onOpenAdmin={() => navigate("/admin")} />;
-  if (screen === "dashboard") return <ProDashboard user={proUser!} jobStatus={jobStatus} activeRequest={activeRequest} availableOffers={visibleOffers} available={available} onToggleAvailable={handleToggleAvailable} onViewRequest={() => setScreen("job")} onViewOffer={offer => { setSelectedOffer(offer); setScreen("request"); }} onProfile={() => setScreen("profile")} onDocuments={() => setScreen("docview")} onLogout={() => { setProUser(null); navigate("/"); }} />;
+  if (screen === "dashboard") return <ProDashboard user={proUser!} jobStatus={jobStatus} activeRequest={activeRequest} availableOffers={visibleOffers} recentJobs={recentJobs} available={available} onToggleAvailable={handleToggleAvailable} onViewRequest={() => setScreen("job")} onViewOffer={offer => { setSelectedOffer(offer); setScreen("request"); }} onProfile={() => setScreen("profile")} onDocuments={() => setScreen("docview")} onLogout={() => { setProUser(null); navigate("/"); }} />;
   if (screen === "profile") return <ProProfile user={proUser!} onSave={u => { setProUser(u); setScreen("dashboard"); }} onDocuments={() => setScreen("docview")} onBack={() => setScreen("dashboard")} />;
   if (screen === "request") return <ProRequestDetail request={selectedOffer ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} proLocation={proPosition} onAccepted={handleOfferAccepted} onRejected={handleOfferRejected} onBack={() => { setSelectedOffer(null); setScreen("dashboard"); }} />;
   if (screen === "job") return <ProActiveJob request={activeRequest ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} jobStatus={jobStatus} messages={chatMessages} onStatusChange={handleProStatus} onSendMessage={handleProMsg} onFinish={handleJobFinish} onCancelled={() => { resetMarketplace(); setScreen("dashboard"); }} onBack={() => setScreen("dashboard")} />;

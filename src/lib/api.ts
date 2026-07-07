@@ -178,6 +178,38 @@ export async function getJobById(requestId: string): Promise<ServiceRequest> {
   return rowToServiceRequest(data);
 }
 
+export interface RecentJob { id: string; category: ServiceCategory; clientName: string; completedAt: string; rating?: number }
+
+// Últimos trabajos completados de un profesional (para "Trabajos recientes"
+// en su panel — antes era una lista inventada de ejemplo).
+export async function getRecentJobsForProfessional(professionalId: string): Promise<RecentJob[]> {
+  if (config.MOCK_MODE) return [];
+  const { data, error } = await supabase
+    .from("service_requests")
+    .select("id, category, completed_at, clients(name), reviews(rating)")
+    .eq("professional_id", professionalId)
+    .in("status", ["completed", "rated"])
+    .order("completed_at", { ascending: false })
+    .limit(5);
+  if (error) throw { code: "db_error", message: error.message };
+  return (data ?? []).map((row: any) => ({
+    id: row.id,
+    category: row.category,
+    clientName: row.clients?.name ?? "Cliente",
+    completedAt: row.completed_at,
+    rating: Array.isArray(row.reviews) ? row.reviews[0]?.rating : row.reviews?.rating,
+  }));
+}
+
+// Cantidad real de solicitudes de un cliente (clients.total_requests no se
+// mantiene actualizado por ningún trigger — se cuenta en vivo en su lugar).
+export async function getClientRequestCount(clientId: string): Promise<number> {
+  if (config.MOCK_MODE) return 0;
+  const { count, error } = await supabase.from("service_requests").select("id", { count: "exact", head: true }).eq("client_id", clientId);
+  if (error) throw { code: "db_error", message: error.message };
+  return count ?? 0;
+}
+
 // Solicitud activa más reciente asignada a un profesional (pendiente de
 // aceptar o ya en curso). Se usa para que el panel del profesional muestre
 // solicitudes reales sin depender de que cliente y profesional compartan
