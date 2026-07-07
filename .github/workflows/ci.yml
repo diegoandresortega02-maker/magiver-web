@@ -18,3 +18,28 @@ jobs:
       - run: npm ci
       - run: npm run test
       - run: npm run build
+
+  android-build:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - run: npm run build
+      - run: npx cap sync android
+      # TODO: una vez que el proyecto de Firebase (Fase 4e) esté listo y se
+      # aplique el plugin de Google Services en android/build.gradle, agregar
+      # acá un paso que restaure google-services.json desde el secreto
+      # GOOGLE_SERVICES_JSON_BASE64 antes de este build (si no, gradlew fallará
+      # al no encontrar el archivo que el plugin exige).
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug
