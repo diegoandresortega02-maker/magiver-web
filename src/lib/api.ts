@@ -384,6 +384,27 @@ export async function deletePushSubscription(endpoint: string): Promise<void> {
   if (error) throw { code: "db_error", message: error.message };
 }
 
+// Variante para apps nativas (Android/iOS vía Capacitor): el WebView nativo
+// no soporta la Push API del navegador, así que ahí se usa un token de FCM
+// en vez de una suscripción Web Push — misma tabla, columna `platform`.
+export async function saveFcmToken(token: string, platform: "android" | "ios"): Promise<void> {
+  if (config.MOCK_MODE || !token) return;
+  const { data: userData } = await supabase.auth.getUser();
+  const userId = userData.user?.id;
+  if (!userId) return;
+  const { error } = await supabase.from("push_subscriptions").upsert(
+    { user_id: userId, platform, fcm_token: token },
+    { onConflict: "fcm_token" },
+  );
+  if (error) throw { code: "db_error", message: error.message };
+}
+
+export async function deleteFcmToken(token: string): Promise<void> {
+  if (config.MOCK_MODE) return;
+  const { error } = await supabase.from("push_subscriptions").delete().eq("fcm_token", token);
+  if (error) throw { code: "db_error", message: error.message };
+}
+
 // ─── Chat ────────────────────────────────────────────────────────────────────
 
 export async function getMessages(requestId: string): Promise<ChatMessage[]> {
