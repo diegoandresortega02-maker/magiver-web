@@ -665,13 +665,21 @@ async function reverseGeocode(lat: number, lng: number): Promise<string | null> 
   }
 }
 
-interface MapMarker { id: string; lat: number; lng: number; label: string; color?: string; labelColor?: string }
+interface MapMarker { id: string; lat: number; lng: number; label: string; color?: string; labelColor?: string; draggable?: boolean }
 
-function RealMap({ markers }: { markers: MapMarker[] }) {
+function RealMap({ markers, zoom = 14, onMarkerDragEnd, onMapClick }: {
+  markers: MapMarker[]; zoom?: number;
+  onMarkerDragEnd?: (id: string, lat: number, lng: number) => void;
+  onMapClick?: (lat: number, lng: number) => void;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState(false);
-  const markersKey = markers.map(m => `${m.id}:${m.lat.toFixed(5)},${m.lng.toFixed(5)}`).join("|");
+  const markersKey = markers.map(m => `${m.id}:${m.lat.toFixed(5)},${m.lng.toFixed(5)}:${m.draggable ? 1 : 0}`).join("|");
+  const onMarkerDragEndRef = useRef(onMarkerDragEnd);
+  onMarkerDragEndRef.current = onMarkerDragEnd;
+  const onMapClickRef = useRef(onMapClick);
+  onMapClickRef.current = onMapClick;
 
   useEffect(() => {
     let cancelled = false;
@@ -685,20 +693,29 @@ function RealMap({ markers }: { markers: MapMarker[] }) {
     if (!ready || !ref.current || markers.length === 0) return;
     const g = (window as any).google;
     const map = new g.maps.Map(ref.current, {
-      center: { lat: markers[0].lat, lng: markers[0].lng }, zoom: 14,
+      center: { lat: markers[0].lat, lng: markers[0].lng }, zoom,
       disableDefaultUI: true, zoomControl: true, clickableIcons: false,
     });
     const bounds = new g.maps.LatLngBounds();
     markers.forEach(m => {
-      new g.maps.Marker({
-        position: { lat: m.lat, lng: m.lng }, map, title: m.label,
+      const marker = new g.maps.Marker({
+        position: { lat: m.lat, lng: m.lng }, map, title: m.label, draggable: !!m.draggable,
         label: { text: m.label, color: m.labelColor ?? "#fff", fontWeight: "700", fontSize: "11px" },
         icon: { path: g.maps.SymbolPath.CIRCLE, scale: 16, fillColor: m.color ?? NAVY, fillOpacity: 1, strokeColor: "#fff", strokeWeight: 2 },
       });
+      if (m.draggable) {
+        marker.addListener("dragend", () => {
+          const pos = marker.getPosition();
+          onMarkerDragEndRef.current?.(m.id, pos.lat(), pos.lng());
+        });
+      }
       bounds.extend({ lat: m.lat, lng: m.lng });
     });
+    if (onMapClickRef.current) {
+      map.addListener("click", (e: any) => onMapClickRef.current?.(e.latLng.lat(), e.latLng.lng()));
+    }
     if (markers.length > 1) map.fitBounds(bounds, 48);
-  }, [ready, markersKey]);
+  }, [ready, markersKey, zoom]);
 
   if (error) return <MapView />;
   return <div ref={ref} className="w-full rounded-2xl overflow-hidden" style={{ aspectRatio: "16/9", background: "#E8F5E9" }} />;
@@ -706,9 +723,13 @@ function RealMap({ markers }: { markers: MapMarker[] }) {
 
 // Usa el mapa real cuando hay una clave de Google Maps configurada y al
 // menos una coordenada real; si no, cae al mapa decorativo de siempre.
-function LiveMap({ markers, fallback }: { markers: MapMarker[]; fallback?: React.ReactNode }) {
+function LiveMap({ markers, fallback, zoom, onMarkerDragEnd, onMapClick }: {
+  markers: MapMarker[]; fallback?: React.ReactNode; zoom?: number;
+  onMarkerDragEnd?: (id: string, lat: number, lng: number) => void;
+  onMapClick?: (lat: number, lng: number) => void;
+}) {
   if (!config.MAPS_API_KEY || markers.length === 0) return <>{fallback ?? <MapView />}</>;
-  return <RealMap markers={markers} />;
+  return <RealMap markers={markers} zoom={zoom} onMarkerDragEnd={onMarkerDragEnd} onMapClick={onMapClick} />;
 }
 
 // ─── Legal modal ─────────────────────────────────────────────────────────────
@@ -1576,17 +1597,26 @@ function ClientRequest({ service, clientLocation, onSubmit, onBack }: { service:
   const [detectingAddr, setDetectingAddr] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  // Detecta la dirección real a partir del GPS (como al pedir comida) — el
-  // usuario la puede editar después si pide el servicio para otro lugar.
+  // Posición exacta a usar para la solicitud: arranca en el GPS detectado,
+  // pero el cliente puede arrastrar el pin o tocar el mapa para ajustarla
+  // (por si el servicio es para otra dirección).
+  const [pinLocation, setPinLocation] = useState<GeoPoint | null>(null);
+  useEffect(() => { if (clientLocation && !pinLocation) setPinLocation(clientLocation); }, [clientLocation]);
+  const handlePinChange = (lat: number, lng: number) => {
+    setPinLocation({ lat, lng });
+    setAddrEdited(false); // mover el pin siempre refresca la dirección detectada
+  };
+  // Detecta la dirección real a partir del pin (GPS al inicio, o donde el
+  // cliente lo haya movido) — se puede editar el texto directamente también.
   useEffect(() => {
-    if (!clientLocation || addrEdited) return;
+    if (!pinLocation || addrEdited) return;
     let active = true;
     setDetectingAddr(true);
-    reverseGeocode(clientLocation.lat, clientLocation.lng).then(address => {
+    reverseGeocode(pinLocation.lat, pinLocation.lng).then(address => {
       if (active && address) setAddr(address);
     }).finally(() => { if (active) setDetectingAddr(false); });
     return () => { active = false; };
-  }, [clientLocation?.lat, clientLocation?.lng]);
+  }, [pinLocation?.lat, pinLocation?.lng]);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!desc) return;
@@ -1595,11 +1625,11 @@ function ClientRequest({ service, clientLocation, onSubmit, onBack }: { service:
     try {
       if (config.MOCK_MODE) {
         await new Promise(r => setTimeout(r, 800));
-        onSubmit({ id: `req-${Date.now()}`, service, description: desc, address: addr, lat: clientLocation?.lat, lng: clientLocation?.lng });
+        onSubmit({ id: `req-${Date.now()}`, service, description: desc, address: addr, lat: pinLocation?.lat, lng: pinLocation?.lng });
         return;
       }
       const categoryId = (SERVICES.find(s => s.label === service)?.id ?? "otro") as any;
-      const location = clientLocation ?? { lat: -17.785, lng: -63.181 };
+      const location = pinLocation ?? { lat: -17.785, lng: -63.181 };
       const real = await createServiceRequest({
         category: categoryId, description: desc,
         address: { street: addr, zone: "", city: "Santa Cruz de la Sierra", lat: location.lat, lng: location.lng },
@@ -1626,13 +1656,27 @@ function ClientRequest({ service, clientLocation, onSubmit, onBack }: { service:
             <textarea placeholder="Describe qué necesitas. Ej: 'El tomacorriente del cuarto ya no funciona...'" value={desc} onChange={e => setDesc(e.target.value)} rows={4} className="w-full px-4 py-3 rounded-xl border text-sm outline-none bg-white resize-none" style={{ borderColor: "#E5E7EB", color: NAVY }} required />
           </div>
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: NAVY }}>Dirección</label>
+            <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: NAVY }}>Ubicación del servicio</label>
+            {pinLocation && config.MAPS_API_KEY && (
+              <div className="relative mb-3">
+                <RealMap
+                  zoom={16}
+                  markers={[{ id: "pin", lat: pinLocation.lat, lng: pinLocation.lng, label: "", color: LIME, draggable: true }]}
+                  onMarkerDragEnd={(_id, lat, lng) => handlePinChange(lat, lng)}
+                  onMapClick={(lat, lng) => handlePinChange(lat, lng)}
+                />
+                <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold" style={{ background: "rgba(15,23,42,0.85)", color: "#fff" }}>
+                  <Edit3 className="w-3.5 h-3.5" style={{ color: LIME }} />
+                  Arrastra el pin o toca el mapa para ajustar
+                </div>
+              </div>
+            )}
             <div className="relative">
               <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input type="text" value={addr} onChange={e => { setAddr(e.target.value); setAddrEdited(true); }} className="w-full pl-9 pr-4 py-3 rounded-xl border text-sm outline-none bg-white" style={{ borderColor: "#E5E7EB", color: NAVY }} required />
               {detectingAddr && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 animate-spin" />}
             </div>
-            <p className="text-xs text-slate-400 mt-1">{clientLocation ? "Detectada con tu GPS — puedes editarla si el servicio es para otro lugar." : "Escribe la dirección exacta."}</p>
+            <p className="text-xs text-slate-400 mt-1">{clientLocation ? "Detectada con tu GPS — ajusta el pin o edita el texto si es para otro lugar." : "Escribe la dirección exacta."}</p>
           </div>
           <div className="p-4 rounded-xl border" style={{ background: "#FFFBEB", borderColor: "#FDE68A" }}>
             <div className="flex items-start gap-2"><MessageSquare className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" /><p className="text-xs text-amber-700 leading-relaxed">El precio se coordina directamente entre tú y el profesional a través del chat.</p></div>
