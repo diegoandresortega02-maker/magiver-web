@@ -20,6 +20,7 @@ import catProfFisica from "@/assets/photos/cat-profesor-fisica.jpg";
 import catProfIngles from "@/assets/photos/cat-profesor-ingles.jpg";
 import { config } from "@/lib/config";
 import { realtime } from "@/lib/realtime";
+import { distanceKm as haversineKm } from "@/lib/geo";
 import { loginClient, registerClient, loginPro, loginAdmin } from "@/lib/auth";
 import {
   registerProfessional as apiRegisterProfessional,
@@ -210,15 +211,6 @@ const CLIENT_REASONS: { code: string; label: string }[] = [
   { code: "no_longer_needed", label: "Ya no necesito el servicio" },
   { code: "other", label: "Otro" },
 ];
-
-// Distancia real entre dos puntos GPS (fórmula de Haversine, en km).
-function haversineKm(a: GeoPoint, b: GeoPoint): number {
-  const R = 6371;
-  const dLat = (b.lat - a.lat) * Math.PI / 180;
-  const dLng = (b.lng - a.lng) * Math.PI / 180;
-  const s = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
-}
 
 // Notificaciones push reales (funcionan con el navegador cerrado). Se llama
 // en un momento con contexto claro para el usuario (justo al enviar su
