@@ -46,6 +46,10 @@ export const config = {
 
   // Modo mock: true = usa datos falsos, false = llama al API real
   MOCK_MODE: import.meta.env.VITE_MOCK_MODE !== "false",
+
+  // Monitoreo de errores en producción (Sentry). DSN público, seguro de
+  // exponer en el cliente. Si está vacío, Sentry simplemente no se inicializa.
+  SENTRY_DSN: import.meta.env.VITE_SENTRY_DSN ?? "",
 } as const;
 
 export type AppConfig = typeof config;
