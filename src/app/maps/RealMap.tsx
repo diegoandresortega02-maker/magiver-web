@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { config } from "@/lib/config";
 import { NAVY } from "../ui/primitives";
-import { loadGoogleMaps, MINIMAL_MAP_STYLE } from "./googleMaps";
+import { loadGoogleMaps, getMapsApiKey, MINIMAL_MAP_STYLE } from "./googleMaps";
 import { MapView, type MapMarker } from "./MapView";
 
 export function RealMap({ markers, zoom = 14, onMarkerDragEnd, onMapClick }: {
@@ -20,7 +19,7 @@ export function RealMap({ markers, zoom = 14, onMarkerDragEnd, onMapClick }: {
 
   useEffect(() => {
     let cancelled = false;
-    loadGoogleMaps(config.MAPS_API_KEY)
+    loadGoogleMaps(getMapsApiKey())
       .then(() => { if (!cancelled) setReady(true); })
       .catch(() => { if (!cancelled) setError(true); });
     return () => { cancelled = true; };
@@ -65,6 +64,6 @@ export function LiveMap({ markers, fallback, zoom, onMarkerDragEnd, onMapClick }
   onMarkerDragEnd?: (id: string, lat: number, lng: number) => void;
   onMapClick?: (lat: number, lng: number) => void;
 }) {
-  if (!config.MAPS_API_KEY || markers.length === 0) return <>{fallback ?? <MapView />}</>;
+  if (!getMapsApiKey() || markers.length === 0) return <>{fallback ?? <MapView />}</>;
   return <RealMap markers={markers} zoom={zoom} onMarkerDragEnd={onMarkerDragEnd} onMapClick={onMapClick} />;
 }

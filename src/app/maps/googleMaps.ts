@@ -1,4 +1,14 @@
+import { Capacitor } from "@capacitor/core";
 import { config } from "@/lib/config";
+
+// Dentro del WebView nativo de Android el origen no es magiver.com.bo, así
+// que la clave web (restringida por referrer HTTP) no puede funcionar ahí —
+// se usa una segunda clave restringida por app Android (paquete + SHA-1).
+export function getMapsApiKey(): string {
+  return Capacitor.isNativePlatform() && config.MAPS_API_KEY_ANDROID
+    ? config.MAPS_API_KEY_ANDROID
+    : config.MAPS_API_KEY;
+}
 
 // ─── Mapa real (Google Maps) ──────────────────────────────────────────────────
 // Carga el script de Google Maps una sola vez (cacheado en un módulo-level
@@ -46,9 +56,9 @@ export function loadGoogleMaps(apiKey: string): Promise<void> {
 // la clave con "REQUEST_DENIED". El Geocoder de la librería JS sí respeta
 // la restricción de referrer correctamente.
 export async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
-  if (!config.MAPS_API_KEY) return null;
+  if (!getMapsApiKey()) return null;
   try {
-    await loadGoogleMaps(config.MAPS_API_KEY);
+    await loadGoogleMaps(getMapsApiKey());
     const g = (window as any).google;
     const geocoder = new g.maps.Geocoder();
     const result = await geocoder.geocode({ location: { lat, lng } });

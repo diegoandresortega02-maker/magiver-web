@@ -15,6 +15,11 @@ export const config = {
   // TODO: agregar clave de Google Maps Platform
   MAPS_API_KEY: import.meta.env.VITE_MAPS_API_KEY ?? "",
 
+  // Clave de Google Maps restringida a la app Android (paquete + huella SHA-1)
+  // en vez de por referrer HTTP — la clave web no funciona dentro del WebView
+  // de Capacitor. Seleccionada en tiempo de ejecución vía getMapsApiKey().
+  MAPS_API_KEY_ANDROID: import.meta.env.VITE_MAPS_API_KEY_ANDROID ?? "",
+
   // Web Push (notificaciones reales, funcionan con el navegador cerrado).
   // Clave pública VAPID — segura de exponer en el cliente.
   VAPID_PUBLIC_KEY: import.meta.env.VITE_VAPID_PUBLIC_KEY ?? "",
@@ -33,7 +38,7 @@ export const config = {
   // Deep links para abrir la app móvil desde el sitio web
   APP_SCHEME: "magiver://",          // URI scheme de la app nativa
   APP_STORE_URL: "https://apps.apple.com/app/magiver",
-  PLAY_STORE_URL: "https://play.google.com/store/apps/details?id=com.magiver",
+  PLAY_STORE_URL: "https://play.google.com/store/apps/details?id=com.magiver.app",
 
   // Toggles de feature flags
   // TODO: conectar a un servicio de feature flags (LaunchDarkly, GrowthBook, etc.)
