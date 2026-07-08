@@ -2,8 +2,8 @@ import { useState, useEffect } from "react";
 import { config } from "@/lib/config";
 import { loginClient, registerClient } from "@/lib/auth";
 import { getClientRequestCount } from "@/lib/api";
-import { User, Phone, Mail, AlertCircle, Loader2, Check } from "lucide-react";
-import { NAVY, LIME, LogoIcon, LimeBtn, AppHeader, ScreenWrap, InputField, Card } from "../ui/primitives";
+import { User, Phone, Mail, AlertCircle, Loader2, Check, LogOut } from "lucide-react";
+import { NAVY, LIME, LogoIcon, LimeBtn, DangerBtn, AppHeader, ScreenWrap, InputField, Card } from "../ui/primitives";
 import { LegalModal, LegalCheckbox, type LegalTab } from "../legal/LegalModal";
 import type { ClientUser } from "../types.local";
 
@@ -93,7 +93,7 @@ export function ClientAuth({ onDone, onBack }: { onDone: (u: ClientUser) => void
 }
 
 // ─── CLIENT PROFILE ──────────────────────────────────────────────────────────
-export function ClientProfile({ user, onSave, onBack }: { user: ClientUser; onSave: (u: ClientUser) => void; onBack: () => void }) {
+export function ClientProfile({ user, onSave, onBack, onLogout }: { user: ClientUser; onSave: (u: ClientUser) => void; onBack: () => void; onLogout: () => void }) {
   const [name, setName] = useState(user.name); const [phone, setPhone] = useState(user.phone); const [email, setEmail] = useState(user.email);
   const [saved, setSaved] = useState(false);
   const [requestCount, setRequestCount] = useState<number | null>(null);
@@ -129,6 +129,7 @@ export function ClientProfile({ user, onSave, onBack }: { user: ClientUser; onSa
           <div className="flex justify-between text-sm mb-2"><span className="text-slate-500">Servicios solicitados</span><span className="font-semibold" style={{ color: NAVY }}>{requestCount ?? "—"}</span></div>
           <div className="flex justify-between text-sm"><span className="text-slate-500">Miembro desde</span><span className="font-semibold" style={{ color: NAVY }}>{memberSince ?? "—"}</span></div>
         </Card>
+        <DangerBtn onClick={onLogout} className="w-full mt-6"><LogOut className="w-4 h-4" />Cerrar sesión</DangerBtn>
       </div>
     </ScreenWrap>
   );

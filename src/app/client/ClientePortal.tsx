@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { config } from "@/lib/config";
-import { loadSession } from "@/lib/auth";
+import { loadSession, logout } from "@/lib/auth";
 import { useAppCtx, useChatMessages } from "../context/AppContext";
 import { useGeolocation } from "../hooks/useGeolocation";
 import { SessionLoading } from "../ui/primitives";
@@ -66,7 +66,7 @@ export function ClientePortal() {
 
   if (checkingSession) return <SessionLoading />;
   if (screen === "auth") return <ClientAuth onDone={u => { setClientUser(u); setScreen("services"); }} onBack={() => navigate("/")} />;
-  if (screen === "profile") return <ClientProfile user={clientUser!} onSave={u => { setClientUser(u); setScreen("services"); }} onBack={() => setScreen("services")} />;
+  if (screen === "profile") return <ClientProfile user={clientUser!} onSave={u => { setClientUser(u); setScreen("services"); }} onBack={() => setScreen("services")} onLogout={() => { logout(); reset(); setClientUser(null); setScreen("auth"); navigate("/"); }} />;
   if (screen === "services") return <ClientServices user={clientUser!} clientLocation={clientGeo.position} onSelect={s => { setSelectedService(s); setScreen("request"); }} onProfile={() => setScreen("profile")} onBack={() => navigate("/")} />;
   if (screen === "request") return <ClientRequest service={selectedService} clientLocation={clientGeo.position} onSubmit={req => { setActiveRequest(req); setJobStatus("searching"); setScreen("searching"); }} onBack={() => setScreen("services")} />;
   if (screen === "searching") return <ClientSearching requestId={activeRequest!.id!} onMatched={handleMatched} onCancel={() => { reset(); setScreen("services"); }} />;

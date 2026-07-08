@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { config } from "@/lib/config";
-import { loadSession } from "@/lib/auth";
+import { loadSession, logout } from "@/lib/auth";
 import {
   getPendingVerifications, getActiveProfessionals, getRejectedProfessionals, getAdminStats,
 } from "@/lib/api";
@@ -59,7 +59,7 @@ export function AdminPortal() {
 
   if (checkingSession) return <SessionLoading />;
   if (screen === "auth") return <AdminAuth onLogin={() => setScreen("dashboard")} onBack={() => navigate("/")} />;
-  if (screen === "dashboard") return <AdminDashboard pendingList={pendingList} loadingPending={loadingPending} activeList={activeList} loadingActive={loadingActive} rejectedList={rejectedList} loadingRejected={loadingRejected} adminStats={adminStats} onReview={rec => { setReviewingRecord(rec); setScreen("review"); }} onLogout={() => navigate("/")} />;
+  if (screen === "dashboard") return <AdminDashboard pendingList={pendingList} loadingPending={loadingPending} activeList={activeList} loadingActive={loadingActive} rejectedList={rejectedList} loadingRejected={loadingRejected} adminStats={adminStats} onReview={rec => { setReviewingRecord(rec); setScreen("review"); }} onLogout={() => { logout(); navigate("/"); }} />;
   if (screen === "review") return <AdminProReview record={reviewingRecord!} onDone={() => setScreen("dashboard")} onBack={() => setScreen("dashboard")} />;
   return null;
 }
