@@ -40,17 +40,10 @@ captures/
 
 # IntelliJ
 *.iml
-.idea/workspace.xml
-.idea/tasks.xml
-.idea/gradle.xml
-.idea/assetWizardSettings.xml
-.idea/dictionaries
-.idea/libraries
-# Android Studio 3 in .gitignore file.
-.idea/caches
-.idea/modules.xml
-# Comment next line if keeping position of elements in Navigation Editor is relevant for you
-.idea/navEditor.xml
+# Config local del IDE (rutas de SDK/emuladores de cada máquina) - no se
+# comparte entre desarrolladores, por eso se ignora la carpeta completa
+# en vez de la lista parcial que genera la plantilla por defecto.
+.idea/
 
 # Keystore files
 # Uncomment the following lines if you do not want to check your keystore files in.

@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { config } from "@/lib/config";
+import { loadSession } from "@/lib/auth";
 import { useAppCtx, useChatMessages } from "../context/AppContext";
 import { useGeolocation } from "../hooks/useGeolocation";
+import { SessionLoading } from "../ui/primitives";
 import { ClientAuth, ClientProfile } from "./ClientAuthProfile";
 import { ClientServices, ClientMap, ClientRequest, ClientSearching } from "./ClientJobFlow";
 import { ClientTracking, ClientPricePaid, ClientRate, ClientDone } from "./ClientTracking";
@@ -25,6 +27,23 @@ export function ClientePortal() {
   const [screen, setScreen] = useState<CS>("auth");
   const [clientUser, setClientUser] = useState<ClientUser | null>(null);
   const [selectedService, setSelectedService] = useState("");
+  const [checkingSession, setCheckingSession] = useState(!config.MOCK_MODE);
+
+  // Restaura la sesión si ya había una guardada (Supabase persiste el token
+  // solo, esto evita pedir login de nuevo tras recargar la app o volver
+  // atrás — antes esto no se revisaba y siempre arrancaba en "auth").
+  useEffect(() => {
+    if (config.MOCK_MODE) return;
+    let active = true;
+    loadSession().then(session => {
+      if (!active) return;
+      if (session?.user.role === "client") {
+        setClientUser(session.user as ClientUser);
+        setScreen("services");
+      }
+    }).finally(() => { if (active) setCheckingSession(false); });
+    return () => { active = false; };
+  }, []);
 
   const handleMatched = (pro: Professional) => {
     setSelectedPro(pro);
@@ -45,6 +64,7 @@ export function ClientePortal() {
   };
   const reset = () => { resetMarketplace(); setSelectedService(""); };
 
+  if (checkingSession) return <SessionLoading />;
   if (screen === "auth") return <ClientAuth onDone={u => { setClientUser(u); setScreen("services"); }} onBack={() => navigate("/")} />;
   if (screen === "profile") return <ClientProfile user={clientUser!} onSave={u => { setClientUser(u); setScreen("services"); }} onBack={() => setScreen("services")} />;
   if (screen === "services") return <ClientServices user={clientUser!} clientLocation={clientGeo.position} onSelect={s => { setSelectedService(s); setScreen("request"); }} onProfile={() => setScreen("profile")} onBack={() => navigate("/")} />;

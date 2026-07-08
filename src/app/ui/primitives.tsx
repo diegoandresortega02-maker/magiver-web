@@ -78,6 +78,16 @@ export function LogoIcon({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
   );
 }
 
+// Pantalla breve mientras se revisa si ya hay una sesión de Supabase válida
+// guardada (evita mostrar el login de golpe y que desaparezca al instante).
+export function SessionLoading() {
+  return (
+    <div className="min-h-screen flex items-center justify-center" style={{ background: NAVY }}>
+      <LogoIcon size="lg" />
+    </div>
+  );
+}
+
 // ─── Shared primitives ──────────────────────────────────────────────────────
 export function LimeBtn({ children, onClick, className = "", type = "button", disabled = false }: {
   children: React.ReactNode; onClick?: () => void; className?: string;

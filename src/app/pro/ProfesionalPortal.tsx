@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { config } from "@/lib/config";
+import { loadSession } from "@/lib/auth";
 import { distanceKm as haversineKm } from "@/lib/geo";
+import { SessionLoading } from "../ui/primitives";
 import {
   getActiveRequestForProfessional, subscribeToRequestChanges, updateMyPresence,
   updateJobStatus, getAvailableOffersForProfessional, subscribeToAvailableOffers, getRejectedRequestIds,
@@ -33,6 +35,23 @@ export function ProfesionalPortal() {
   const [screen, setScreen] = useState<PS>("auth");
   const [proUser, setProUser] = useState<ProUser | null>(null);
   const [proDocuments, setProDocuments] = useState<DocumentSet | null>(null);
+  const [checkingSession, setCheckingSession] = useState(!config.MOCK_MODE);
+
+  // Restaura la sesión si ya había una guardada (ver mismo fix en
+  // ClientePortal) — antes siempre arrancaba en "auth" sin revisar si el
+  // profesional ya tenía una sesión de Supabase válida.
+  useEffect(() => {
+    if (config.MOCK_MODE) return;
+    let active = true;
+    loadSession().then(session => {
+      if (!active) return;
+      if (session?.user.role === "professional") {
+        setProUser(session.user as ProUser);
+        setScreen(session.user.status === "active" ? "dashboard" : "verify");
+      }
+    }).finally(() => { if (active) setCheckingSession(false); });
+    return () => { active = false; };
+  }, []);
 
   // Muestra las solicitudes reales asignadas a este profesional (no depende
   // de que cliente y profesional compartan la misma pestaña del navegador),
@@ -156,6 +175,7 @@ export function ProfesionalPortal() {
       realChat.send(text).catch(() => {});
     }
   };
+  if (checkingSession) return <SessionLoading />;
   if (screen === "auth") return <ProAuth onLogin={u => { setProUser(u); setScreen("dashboard"); }} onRegister={() => setScreen("register")} onBack={() => navigate("/")} />;
   if (screen === "register") return <ProRegister onSubmit={u => { setProUser(u); setScreen("documents"); }} onBack={() => setScreen("auth")} />;
   if (screen === "documents") return <ProDocuments user={proUser!} onSubmit={handleDocSubmit} onBack={() => setScreen("register")} />;
