@@ -2,7 +2,7 @@ import { useState } from "react";
 import isotipo from "@/imports/isotipo_azul_verde_para_redes_-_verde_oficial.png";
 import { config } from "@/lib/config";
 import {
-  ChevronLeft, Eye, EyeOff, Clock, BadgeCheck, XCircle, Loader2, AlertCircle,
+  ChevronLeft, Eye, EyeOff, Clock, BadgeCheck, XCircle, Loader2, AlertCircle, Star,
 } from "lucide-react";
 import type { JobStatus, Professional } from "../types.local";
 
@@ -226,6 +226,35 @@ export function Card({ children, className = "", onClick }: {
       style={{ borderColor: "#E5E7EB" }}>
       {children}
     </div>
+  );
+}
+
+export function JobHistoryCard({ categoryLabel, counterpartName, dateLabel, rating, amount, photoUrls }: {
+  categoryLabel: string; counterpartName: string; dateLabel: string;
+  rating?: number; amount?: number; photoUrls: string[];
+}) {
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-2">
+        <p className="font-semibold text-sm" style={{ color: NAVY }}>{categoryLabel}</p>
+        {amount != null && <span className="font-bold text-sm" style={{ color: NAVY }}>Bs {amount.toFixed(0)}</span>}
+      </div>
+      <p className="text-xs text-slate-500 mb-1">{counterpartName} · {dateLabel}</p>
+      {rating != null && (
+        <div className="flex items-center gap-1 mb-2">
+          {[...Array(rating)].map((_, i) => <Star key={i} className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />)}
+        </div>
+      )}
+      {photoUrls.length > 0 && (
+        <div className="flex gap-2 mt-2">
+          {photoUrls.map((url, i) => (
+            <a key={i} href={url} target="_blank" rel="noreferrer" className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 border" style={{ borderColor: "#E5E7EB" }}>
+              <img src={url} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
+            </a>
+          ))}
+        </div>
+      )}
+    </Card>
   );
 }
 

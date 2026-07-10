@@ -6,12 +6,13 @@ import { useAppCtx, useChatMessages } from "../context/AppContext";
 import { useGeolocation } from "../hooks/useGeolocation";
 import { SessionLoading } from "../ui/primitives";
 import { ClientAuth, ClientProfile } from "./ClientAuthProfile";
+import { ClientHistory } from "./ClientHistory";
 import { ClientServices, ClientMap, ClientRequest, ClientSearching } from "./ClientJobFlow";
 import { ClientTracking, ClientPricePaid, ClientRate, ClientDone } from "./ClientTracking";
 import type { ClientUser, Professional } from "../types.local";
 
 // ─── PAGE: Cliente portal (/cliente) ─────────────────────────────────────────
-type CS = "auth" | "profile" | "services" | "request" | "searching" | "tracking" | "price" | "rate" | "done";
+type CS = "auth" | "profile" | "history" | "services" | "request" | "searching" | "tracking" | "price" | "rate" | "done";
 
 export function ClientePortal() {
   const navigate = useNavigate();
@@ -66,7 +67,8 @@ export function ClientePortal() {
 
   if (checkingSession) return <SessionLoading />;
   if (screen === "auth") return <ClientAuth onDone={u => { setClientUser(u); setScreen("services"); }} onBack={() => navigate("/")} />;
-  if (screen === "profile") return <ClientProfile user={clientUser!} onSave={u => { setClientUser(u); setScreen("services"); }} onBack={() => setScreen("services")} onLogout={() => { logout(); reset(); setClientUser(null); setScreen("auth"); navigate("/"); }} />;
+  if (screen === "profile") return <ClientProfile user={clientUser!} onSave={u => { setClientUser(u); setScreen("services"); }} onBack={() => setScreen("services")} onLogout={() => { logout(); reset(); setClientUser(null); setScreen("auth"); navigate("/"); }} onViewHistory={() => setScreen("history")} />;
+  if (screen === "history") return <ClientHistory user={clientUser!} onBack={() => setScreen("profile")} />;
   if (screen === "services") return <ClientServices user={clientUser!} clientLocation={clientGeo.position} onSelect={s => { setSelectedService(s); setScreen("request"); }} onProfile={() => setScreen("profile")} onBack={() => navigate("/")} />;
   if (screen === "request") return <ClientRequest service={selectedService} clientLocation={clientGeo.position} onSubmit={req => { setActiveRequest(req); setJobStatus("searching"); setScreen("searching"); }} onBack={() => setScreen("services")} />;
   if (screen === "searching") return <ClientSearching requestId={activeRequest!.id!} onMatched={handleMatched} onCancel={() => { reset(); setScreen("services"); }} />;

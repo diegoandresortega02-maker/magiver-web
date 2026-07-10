@@ -27,7 +27,7 @@ export interface Professional {
 export interface Message { id: string; from: "client" | "pro"; text: string; time: string }
 export interface ServiceRequest {
   service: string; description: string; address: string;
-  id?: string; professionalId?: string; agreedPrice?: number; completionPhotoUrl?: string;
+  id?: string; professionalId?: string; agreedPrice?: number; completionPhotoUrls?: string[];
   clientName?: string; lat?: number; lng?: number; searchRadiusKm?: number;
 }
 

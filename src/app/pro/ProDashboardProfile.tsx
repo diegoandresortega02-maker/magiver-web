@@ -1,20 +1,22 @@
-import { useState } from "react";
-import type { RecentJob } from "@/lib/api";
+import { useState, useEffect } from "react";
+import { config } from "@/lib/config";
+import { getProfessionalJobHistory } from "@/lib/api";
+import type { RecentJob, JobHistoryEntry } from "@/lib/api";
 import {
   Bell, User, LogOut, Star, BadgeCheck, ToggleRight, ToggleLeft,
   CheckCircle, FileCheck, ChevronDown, Award, ChevronRight, Phone, Mail, Check,
 } from "lucide-react";
-import { NAVY, LIME, AppHeader, ScreenWrap, InputField, LimeBtn, Card, StatusBadge, VerifBadge, LogoIcon } from "../ui/primitives";
+import { NAVY, LIME, AppHeader, ScreenWrap, InputField, LimeBtn, Card, StatusBadge, VerifBadge, LogoIcon, JobHistoryCard } from "../ui/primitives";
 import { specialtyLabel, SERVICES } from "../lib.local/mappers";
 import type { ProUser, JobStatus, ServiceRequest } from "../types.local";
 
 // ─── PRO DASHBOARD ────────────────────────────────────────────────────────────
-export function ProDashboard({ user, jobStatus, activeRequest, availableOffers, recentJobs, available, onToggleAvailable, onViewRequest, onViewOffer, onProfile, onDocuments, onLogout }: {
+export function ProDashboard({ user, jobStatus, activeRequest, availableOffers, recentJobs, available, onToggleAvailable, onViewRequest, onViewOffer, onProfile, onDocuments, onLogout, onViewHistory }: {
   user: ProUser; jobStatus: JobStatus; activeRequest: ServiceRequest | null; availableOffers: ServiceRequest[];
   recentJobs: RecentJob[];
   available: boolean; onToggleAvailable: () => void;
   onViewRequest: () => void; onViewOffer: (offer: ServiceRequest) => void; onProfile: () => void; onDocuments: () => void;
-  onLogout: () => void;
+  onLogout: () => void; onViewHistory: () => void;
 }) {
   const hasIncoming = availableOffers.length > 0;
   const hasActiveJob = jobStatus === "matched" || jobStatus === "en_camino" || jobStatus === "en_sitio";
@@ -128,6 +130,52 @@ export function ProDashboard({ user, jobStatus, activeRequest, availableOffers, 
                   <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
                 </div>
               </Card>
+            ))}
+          </div>
+        )}
+        {recentJobs.length > 0 && (
+          <button onClick={onViewHistory} className="w-full text-center text-xs font-semibold mt-3" style={{ color: LIME }}>
+            Ver todos →
+          </button>
+        )}
+      </div>
+    </ScreenWrap>
+  );
+}
+
+// ─── PRO JOB HISTORY ──────────────────────────────────────────────────────────
+export function ProJobHistory({ user, onBack }: { user: ProUser; onBack: () => void }) {
+  const [history, setHistory] = useState<JobHistoryEntry[]>([]);
+  const [loading, setLoading] = useState(!config.MOCK_MODE);
+  useEffect(() => {
+    if (config.MOCK_MODE || !user.id) return;
+    let active = true;
+    getProfessionalJobHistory(user.id)
+      .then(h => { if (active) setHistory(h); })
+      .catch(() => {})
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [user.id]);
+  return (
+    <ScreenWrap>
+      <AppHeader title="Historial de trabajos" onBack={onBack} />
+      <div className="flex-1 overflow-y-auto p-4">
+        {loading ? (
+          <p className="text-sm text-slate-400 text-center py-8">Cargando...</p>
+        ) : history.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-8">Todavía no tienes trabajos completados.</p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {history.map(job => (
+              <JobHistoryCard
+                key={job.id}
+                categoryLabel={specialtyLabel(job.category)}
+                counterpartName={job.counterpartName}
+                dateLabel={new Date(job.completedAt).toLocaleDateString("es-BO", { day: "numeric", month: "short", year: "numeric" })}
+                rating={job.rating}
+                amount={job.agreedPrice}
+                photoUrls={job.photoUrls}
+              />
             ))}
           </div>
         )}

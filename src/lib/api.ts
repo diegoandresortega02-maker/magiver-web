@@ -201,6 +201,60 @@ export async function getRecentJobsForProfessional(professionalId: string): Prom
   }));
 }
 
+export interface JobHistoryEntry {
+  id: string;
+  category: ServiceCategory;
+  counterpartName: string;
+  completedAt: string;
+  createdAt: string;
+  rating?: number;
+  agreedPrice?: number;
+  photoUrls: string[];
+}
+
+function rowToJobHistoryEntry(row: any, counterpartTable: "clients" | "professionals", fallbackName: string): JobHistoryEntry {
+  const counterpart = row[counterpartTable];
+  return {
+    id: row.id,
+    category: row.category,
+    counterpartName: counterpart?.name ?? fallbackName,
+    completedAt: row.completed_at,
+    createdAt: row.created_at,
+    rating: Array.isArray(row.reviews) ? row.reviews[0]?.rating : row.reviews?.rating,
+    agreedPrice: row.agreed_price != null ? Number(row.agreed_price) : undefined,
+    photoUrls: row.completion_photo_urls ?? [],
+  };
+}
+
+// Historial completo (sin límite) de trabajos completados de un profesional —
+// hermano de getRecentJobsForProfessional (que sigue igual, para el preview
+// del dashboard), pero sin .limit(5) y con precio + fotos.
+export async function getProfessionalJobHistory(professionalId: string): Promise<JobHistoryEntry[]> {
+  if (config.MOCK_MODE) return [];
+  const { data, error } = await supabase
+    .from("service_requests")
+    .select("id, category, completed_at, created_at, agreed_price, completion_photo_urls, clients(name), reviews(rating)")
+    .eq("professional_id", professionalId)
+    .in("status", ["completed", "rated"])
+    .order("completed_at", { ascending: false });
+  if (error) throw { code: "db_error", message: error.message };
+  return (data ?? []).map((row: any) => rowToJobHistoryEntry(row, "clients", "Cliente"));
+}
+
+// Historial completo de solicitudes completadas de un cliente — no existía
+// ningún equivalente antes (el cliente solo tenía getClientRequestCount).
+export async function getClientRequestHistory(clientId: string): Promise<JobHistoryEntry[]> {
+  if (config.MOCK_MODE) return [];
+  const { data, error } = await supabase
+    .from("service_requests")
+    .select("id, category, completed_at, created_at, agreed_price, completion_photo_urls, professionals(name), reviews(rating)")
+    .eq("client_id", clientId)
+    .in("status", ["completed", "rated"])
+    .order("completed_at", { ascending: false });
+  if (error) throw { code: "db_error", message: error.message };
+  return (data ?? []).map((row: any) => rowToJobHistoryEntry(row, "professionals", "Profesional"));
+}
+
 // Cantidad real de solicitudes de un cliente (clients.total_requests no se
 // mantiene actualizado por ningún trigger — se cuenta en vivo en su lugar).
 export async function getClientRequestCount(clientId: string): Promise<number> {
@@ -552,22 +606,27 @@ export async function uploadDocument(
 
 // ─── Foto de trabajo terminado ────────────────────────────────────────────────
 
-export async function uploadJobPhoto(requestId: string, file: File): Promise<{ url: string }> {
+export async function uploadJobPhoto(requestId: string, files: File[]): Promise<{ urls: string[] }> {
   if (config.MOCK_MODE) {
     await delay(1200);
-    return { url: `https://storage.magiver.com/jobs/${requestId}/${file.name}` };
+    return { urls: files.map(f => `https://storage.magiver.com/jobs/${requestId}/${f.name}`) };
   }
-  const path = `${requestId}/${Date.now()}_${file.name}`;
-  const { error: uploadError } = await supabase.storage.from("job-photos").upload(path, file, { upsert: true });
-  if (uploadError) throw { code: "storage_error", message: uploadError.message };
+  const urls: string[] = [];
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const path = `${requestId}/${Date.now()}_${i}_${file.name}`;
+    const { error: uploadError } = await supabase.storage.from("job-photos").upload(path, file, { upsert: true });
+    if (uploadError) throw { code: "storage_error", message: uploadError.message };
 
-  const { data: signed, error: signedError } = await supabase.storage.from("job-photos").createSignedUrl(path, 60 * 60 * 24 * 365);
-  if (signedError) throw { code: "storage_error", message: signedError.message };
+    const { data: signed, error: signedError } = await supabase.storage.from("job-photos").createSignedUrl(path, 60 * 60 * 24 * 365);
+    if (signedError) throw { code: "storage_error", message: signedError.message };
+    urls.push(signed.signedUrl);
+  }
 
-  const { error: updateError } = await supabase.from("service_requests").update({ completion_photo_url: signed.signedUrl }).eq("id", requestId);
+  const { error: updateError } = await supabase.from("service_requests").update({ completion_photo_urls: urls }).eq("id", requestId);
   if (updateError) throw { code: "db_error", message: updateError.message };
 
-  return { url: signed.signedUrl };
+  return { urls };
 }
 
 // ─── Admin ────────────────────────────────────────────────────────────────────

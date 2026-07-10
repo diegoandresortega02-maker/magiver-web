@@ -5,7 +5,7 @@ import { acceptServiceRequest, rejectServiceRequest, cancelActiveJob } from "@/l
 import type { ProReasonCode } from "@/lib/api";
 import type { GeoPoint } from "@/lib/types";
 import {
-  MapPin, AlertCircle, Loader2, CheckCircle, Car, Check, Upload, Award, Send, Zap, Star,
+  MapPin, AlertCircle, Loader2, CheckCircle, Car, Check, Upload, Award, Send, Zap, Star, X,
 } from "lucide-react";
 import { NAVY, LIME, AppHeader, ScreenWrap, Card, StatusBadge, LimeBtn, DangerBtn, ReasonPickerSheet } from "../ui/primitives";
 import { LiveMap } from "../maps/RealMap";
@@ -114,11 +114,17 @@ export function ProRequestDetail({ request, proLocation, onAccepted, onRejected,
 export function ProActiveJob({ request, jobStatus, messages, onStatusChange, onSendMessage, onFinish, onCancelled, onBack }: {
   request: ServiceRequest; jobStatus: JobStatus; messages: Message[];
   onStatusChange: (s: JobStatus) => void; onSendMessage: (text: string) => void;
-  onFinish: (photoFile: File) => Promise<void>; onCancelled: () => void; onBack: () => void;
+  onFinish: (photoFiles: File[]) => Promise<void>; onCancelled: () => void; onBack: () => void;
 }) {
   const [tab, setTab] = useState<"job" | "chat">("job");
   const [msg, setMsg] = useState("");
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
+  const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
+  useEffect(() => {
+    const urls = photoFiles.map(f => URL.createObjectURL(f));
+    setPhotoPreviews(urls);
+    return () => { urls.forEach(u => URL.revokeObjectURL(u)); };
+  }, [photoFiles]);
   const [finishing, setFinishing] = useState(false);
   const [finishError, setFinishError] = useState("");
   const [showCancel, setShowCancel] = useState(false);
@@ -185,12 +191,35 @@ export function ProActiveJob({ request, jobStatus, messages, onStatusChange, onS
             {jobStatus === "completado" && (
               <div className="flex flex-col gap-3">
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: NAVY }}>Foto del trabajo terminado <span style={{ color: "#EF4444" }}>*</span></label>
-                  <label className={`flex items-center gap-3 px-4 py-3.5 rounded-xl border-2 border-dashed cursor-pointer transition-colors ${photoFile ? "border-lime-400 bg-lime-50" : "border-slate-200 hover:border-slate-300 bg-white"}`}>
-                    {photoFile ? <><CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" /><span className="text-sm font-medium text-green-700 flex-1 truncate">{photoFile.name}</span><span className="text-xs text-green-600">Listo</span></>
-                      : <><Upload className="w-5 h-5 text-slate-400 flex-shrink-0" /><span className="text-sm text-slate-400">Toca para subir una foto</span></>}
-                    <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) setPhotoFile(f); }} />
+                  <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: NAVY }}>
+                    Fotos del trabajo terminado (1 a 3) <span style={{ color: "#EF4444" }}>*</span>
                   </label>
+                  {photoPreviews.length > 0 && (
+                    <div className="grid grid-cols-3 gap-2 mb-2">
+                      {photoPreviews.map((src, i) => (
+                        <div key={i} className="relative w-full aspect-square rounded-xl overflow-hidden border" style={{ borderColor: "#E5E7EB" }}>
+                          <img src={src} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
+                          <button type="button" onClick={() => setPhotoFiles(prev => prev.filter((_, j) => j !== i))}
+                            className="absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,0.6)" }}>
+                            <X className="w-3 h-3 text-white" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {photoFiles.length < 3 && (
+                    <label className="flex items-center gap-3 px-4 py-3.5 rounded-xl border-2 border-dashed cursor-pointer transition-colors border-slate-200 hover:border-slate-300 bg-white">
+                      <Upload className="w-5 h-5 text-slate-400 flex-shrink-0" />
+                      <span className="text-sm text-slate-400">
+                        {photoFiles.length === 0 ? "Toca para subir 1 a 3 fotos" : `Agregar otra foto (${photoFiles.length}/3)`}
+                      </span>
+                      <input type="file" accept="image/*" multiple className="hidden" onChange={e => {
+                        const picked = Array.from(e.target.files ?? []);
+                        if (picked.length > 0) setPhotoFiles(prev => [...prev, ...picked].slice(0, 3));
+                        e.target.value = "";
+                      }} />
+                    </label>
+                  )}
                 </div>
                 {finishError && (
                   <p className="text-xs font-medium flex items-center gap-1.5" style={{ color: "#EF4444" }}>
@@ -198,12 +227,12 @@ export function ProActiveJob({ request, jobStatus, messages, onStatusChange, onS
                   </p>
                 )}
                 <LimeBtn onClick={async () => {
-                  if (!photoFile) return;
+                  if (photoFiles.length === 0) return;
                   setFinishError(""); setFinishing(true);
-                  try { await onFinish(photoFile); }
+                  try { await onFinish(photoFiles); }
                   catch (err: any) { setFinishError(err?.message || "No se pudo finalizar el trabajo. Intenta de nuevo."); }
                   finally { setFinishing(false); }
-                }} disabled={!photoFile || finishing} className="w-full py-4 text-base">
+                }} disabled={photoFiles.length === 0 || finishing} className="w-full py-4 text-base">
                   {finishing ? <><Loader2 className="w-4 h-4 animate-spin" />Finalizando...</> : <>Finalizar y ver resumen <Award className="w-4 h-4" /></>}
                 </LimeBtn>
               </div>

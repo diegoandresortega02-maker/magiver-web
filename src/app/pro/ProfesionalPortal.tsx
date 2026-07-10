@@ -15,12 +15,12 @@ import { useWatchPosition } from "../hooks/useGeolocation";
 import { subscribeToPushNotifications } from "../hooks/usePushSubscription";
 import { apiStatusToLocal, apiRequestToLocal } from "../lib.local/mappers";
 import { ProAuth, ProRegister, ProDocuments, ProVerify } from "./ProAuthRegister";
-import { ProDashboard, ProProfile } from "./ProDashboardProfile";
+import { ProDashboard, ProProfile, ProJobHistory } from "./ProDashboardProfile";
 import { ProRequestDetail, ProActiveJob, ProJobDone } from "./ProJobFlow";
 import type { ProUser, DocumentSet, JobStatus, ServiceRequest } from "../types.local";
 
 // ─── PAGE: Profesional portal (/profesional) ──────────────────────────────────
-type PS = "auth" | "register" | "documents" | "docview" | "verify" | "dashboard" | "profile" | "request" | "job" | "done";
+type PS = "auth" | "register" | "documents" | "docview" | "verify" | "dashboard" | "profile" | "history" | "request" | "job" | "done";
 
 export function ProfesionalPortal() {
   const navigate = useNavigate();
@@ -152,9 +152,9 @@ export function ProfesionalPortal() {
       updateJobStatus(activeRequest.id, status).catch(() => {});
     }
   };
-  const handleJobFinish = async (photoFile: File) => {
+  const handleJobFinish = async (photoFiles: File[]) => {
     if (!config.MOCK_MODE && activeRequest?.id) {
-      await uploadJobPhoto(activeRequest.id, photoFile);
+      await uploadJobPhoto(activeRequest.id, photoFiles);
       await updateJobStatus(activeRequest.id, "completed");
     }
     setScreen("done");
@@ -181,7 +181,8 @@ export function ProfesionalPortal() {
   if (screen === "documents") return <ProDocuments user={proUser!} onSubmit={handleDocSubmit} onBack={() => setScreen("register")} />;
   if (screen === "docview") return <ProDocuments user={proUser!} onSubmit={() => {}} onBack={() => setScreen("profile")} viewOnly docs={proDocuments ?? undefined} />;
   if (screen === "verify") return <ProVerify user={proUser!} onOpenAdmin={() => navigate("/admin")} />;
-  if (screen === "dashboard") return <ProDashboard user={proUser!} jobStatus={jobStatus} activeRequest={activeRequest} availableOffers={visibleOffers} recentJobs={recentJobs} available={available} onToggleAvailable={handleToggleAvailable} onViewRequest={() => setScreen("job")} onViewOffer={offer => { setSelectedOffer(offer); setScreen("request"); }} onProfile={() => setScreen("profile")} onDocuments={() => setScreen("docview")} onLogout={() => { logout(); resetMarketplace(); setProUser(null); navigate("/"); }} />;
+  if (screen === "dashboard") return <ProDashboard user={proUser!} jobStatus={jobStatus} activeRequest={activeRequest} availableOffers={visibleOffers} recentJobs={recentJobs} available={available} onToggleAvailable={handleToggleAvailable} onViewRequest={() => setScreen("job")} onViewOffer={offer => { setSelectedOffer(offer); setScreen("request"); }} onProfile={() => setScreen("profile")} onDocuments={() => setScreen("docview")} onLogout={() => { logout(); resetMarketplace(); setProUser(null); navigate("/"); }} onViewHistory={() => setScreen("history")} />;
+  if (screen === "history") return <ProJobHistory user={proUser!} onBack={() => setScreen("dashboard")} />;
   if (screen === "profile") return <ProProfile user={proUser!} onSave={u => { setProUser(u); setScreen("dashboard"); }} onDocuments={() => setScreen("docview")} onBack={() => setScreen("dashboard")} />;
   if (screen === "request") return <ProRequestDetail request={selectedOffer ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} proLocation={proPosition} onAccepted={handleOfferAccepted} onRejected={handleOfferRejected} onBack={() => { setSelectedOffer(null); setScreen("dashboard"); }} />;
   if (screen === "job") return <ProActiveJob request={activeRequest ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} jobStatus={jobStatus} messages={chatMessages} onStatusChange={handleProStatus} onSendMessage={handleProMsg} onFinish={handleJobFinish} onCancelled={() => { resetMarketplace(); setScreen("dashboard"); }} onBack={() => setScreen("dashboard")} />;
