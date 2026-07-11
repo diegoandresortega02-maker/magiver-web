@@ -6,7 +6,7 @@ import {
   Bell, User, LogOut, Star, BadgeCheck, ToggleRight, ToggleLeft,
   CheckCircle, FileCheck, ChevronDown, Award, ChevronRight, Phone, Mail, Check,
 } from "lucide-react";
-import { NAVY, LIME, AppHeader, ScreenWrap, InputField, LimeBtn, Card, StatusBadge, VerifBadge, LogoIcon, JobHistoryCard } from "../ui/primitives";
+import { NAVY, LIME, AppHeader, ScreenWrap, InputField, LimeBtn, DangerBtn, Card, StatusBadge, VerifBadge, LogoIcon, JobHistoryCard } from "../ui/primitives";
 import { specialtyLabel, SERVICES } from "../lib.local/mappers";
 import type { ProUser, JobStatus, ServiceRequest } from "../types.local";
 
@@ -185,7 +185,7 @@ export function ProJobHistory({ user, onBack }: { user: ProUser; onBack: () => v
 }
 
 // ─── PRO PROFILE ──────────────────────────────────────────────────────────────
-export function ProProfile({ user, onSave, onDocuments, onBack }: { user: ProUser; onSave: (u: ProUser) => void; onDocuments: () => void; onBack: () => void }) {
+export function ProProfile({ user, onSave, onDocuments, onBack, onLogout }: { user: ProUser; onSave: (u: ProUser) => void; onDocuments: () => void; onBack: () => void; onLogout: () => void }) {
   const [name, setName] = useState(user.name); const [phone, setPhone] = useState(user.phone); const [email, setEmail] = useState(user.email);
   const [specialty, setSpecialty] = useState(user.specialty); const [yearsExp, setYearsExp] = useState(String(user.yearsExp)); const [bio, setBio] = useState(user.bio);
   const [saved, setSaved] = useState(false);
@@ -236,6 +236,7 @@ export function ProProfile({ user, onSave, onDocuments, onBack }: { user: ProUse
             {saved ? <><Check className="w-4 h-4" />Guardado</> : "Guardar cambios"}
           </LimeBtn>
         </form>
+        <DangerBtn onClick={onLogout} className="w-full mt-6"><LogOut className="w-4 h-4" />Cerrar sesión</DangerBtn>
       </div>
     </ScreenWrap>
   );
