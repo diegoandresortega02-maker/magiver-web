@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { config } from "@/lib/config";
 import { loadSession, logout } from "@/lib/auth";
+import { getActiveRequestForClient, getProfessionalById } from "@/lib/api";
+import { apiRequestToLocal, apiStatusToLocal, proUserToProfessional } from "../lib.local/mappers";
 import { useAppCtx, useChatMessages } from "../context/AppContext";
 import { useGeolocation } from "../hooks/useGeolocation";
 import { SessionLoading } from "../ui/primitives";
@@ -33,15 +35,30 @@ export function ClientePortal() {
   // Restaura la sesión si ya había una guardada (Supabase persiste el token
   // solo, esto evita pedir login de nuevo tras recargar la app o volver
   // atrás — antes esto no se revisaba y siempre arrancaba en "auth").
+  // También retoma la solicitud en curso (buscando o ya aceptada) si había
+  // una, en vez de perderla y arrancar de cero en "servicios" — antes solo
+  // el profesional tenía este "apartado" de trabajo en curso.
   useEffect(() => {
     if (config.MOCK_MODE) return;
     let active = true;
-    loadSession().then(session => {
-      if (!active) return;
-      if (session?.user.role === "client") {
-        setClientUser(session.user as ClientUser);
-        setScreen("services");
-      }
+    loadSession().then(async session => {
+      if (!active || session?.user.role !== "client") return;
+      const user = session.user as ClientUser;
+      setClientUser(user);
+      try {
+        const req = user.id ? await getActiveRequestForClient(user.id) : null;
+        if (active && req) {
+          setActiveRequest(apiRequestToLocal(req));
+          setJobStatus(apiStatusToLocal(req.status));
+          if (req.professionalId) {
+            const pro = await getProfessionalById(req.professionalId);
+            if (active) setSelectedPro(proUserToProfessional(pro, 0));
+          }
+          setScreen(req.status === "pending" ? "searching" : "tracking");
+          return;
+        }
+      } catch { /* si falla, cae a "services" abajo */ }
+      if (active) setScreen("services");
     }).finally(() => { if (active) setCheckingSession(false); });
     return () => { active = false; };
   }, []);

@@ -287,6 +287,27 @@ export async function getActiveRequestForProfessional(
   return { ...rowToServiceRequest(data), clientName: (data as any).clients?.name };
 }
 
+// Solicitud activa más reciente de un cliente (buscando o ya en curso). Se
+// usa para que el cliente retome directamente su solicitud en curso al
+// volver a abrir la app, en vez de perderla y arrancar de cero en
+// "servicios" — mismo patrón que getActiveRequestForProfessional.
+export async function getActiveRequestForClient(
+  clientId: string,
+): Promise<(ServiceRequest & { professionalName?: string }) | null> {
+  if (config.MOCK_MODE) return null;
+  const { data, error } = await supabase
+    .from("service_requests")
+    .select("*, professionals(name)")
+    .eq("client_id", clientId)
+    .in("status", ACTIVE_REQUEST_STATUSES)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw { code: "db_error", message: error.message };
+  if (!data) return null;
+  return { ...rowToServiceRequest(data), professionalName: (data as any).professionals?.name };
+}
+
 // Suscribe a los cambios (nuevas solicitudes y cambios de estado) de las
 // solicitudes asignadas a un profesional, vía Supabase Realtime.
 export function subscribeToRequestChanges(
