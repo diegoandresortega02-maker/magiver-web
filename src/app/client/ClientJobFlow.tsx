@@ -27,7 +27,7 @@ export function ClientServices({ user, clientLocation, onSelect, onProfile, onVi
       setActiveCategories(reqs.map(r => specialtyLabel(r.category)));
     }).catch(() => {});
   }, [user.id]);
-  const visibleServices = SERVICES.filter(s => s.id !== "otro" && normalize(s.label).includes(normalize(query)));
+  const visibleServices = SERVICES.filter(s => normalize(s.label).includes(normalize(query)));
   return (
     <ScreenWrap>
       <AppHeader title="MAGIVER" onBack={onBack}

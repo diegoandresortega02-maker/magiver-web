@@ -1,7 +1,7 @@
 import { distanceKm as haversineKm } from "@/lib/geo";
 import type { ProUser as ApiProUser, ServiceRequest as ApiServiceRequest, GeoPoint } from "@/lib/types";
 import {
-  Zap, Droplets, Wind, Wrench, Paintbrush, MoreHorizontal, Car,
+  Zap, Droplets, Wind, Wrench, Paintbrush, Car,
   Bike, Sparkles, Flame, Leaf, Bug, Calculator, FlaskConical, Atom, Languages,
 } from "lucide-react";
 import type { Professional, JobStatus, ServiceRequest } from "../types.local";
@@ -30,7 +30,6 @@ export const SERVICES = [
   { id: "profesor_quimica", label: "Profesor de Química", icon: FlaskConical, color: "#0891B2" },
   { id: "profesor_fisica", label: "Profesor de Física", icon: Atom, color: "#4F46E5" },
   { id: "profesor_ingles", label: "Profesor de Inglés", icon: Languages, color: "#DB2777" },
-  { id: "otro", label: "Otro", icon: MoreHorizontal, color: "#6B7280" },
 ];
 
 // Convierte el id técnico guardado en la base (ej. "aire_acondicionado")
