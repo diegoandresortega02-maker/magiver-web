@@ -4,7 +4,7 @@ import { getNearbyProfessionals, createServiceRequest, updateJobStatus, getProfe
 import type { GeoPoint, ServiceRequest as ApiServiceRequest } from "@/lib/types";
 import {
   MapPin, Star, BadgeCheck, Clock, MessageSquare, Send, ArrowRight,
-  Loader2, AlertCircle, Edit3, Zap,
+  Loader2, AlertCircle, Edit3, Zap, X,
 } from "lucide-react";
 import { NAVY, LIME, LIGHT, AppHeader, ScreenWrap, ProAvatar, LimeBtn, DangerBtn, Card, StatusBadge } from "../ui/primitives";
 import { LiveMap, RealMap } from "../maps/RealMap";
@@ -291,8 +291,8 @@ export function ClientRequest({ service, clientLocation, onSubmit, onBack }: { s
 }
 
 // ─── CLIENT SEARCHING ─────────────────────────────────────────────────────────
-export function ClientSearching({ requestId, onMatched, onCancel }: {
-  requestId: string; onMatched: (pro: Professional) => void; onCancel: () => void;
+export function ClientSearching({ requestId, notice, onDismissNotice, onMatched, onCancel }: {
+  requestId: string; notice?: string; onDismissNotice?: () => void; onMatched: (pro: Professional) => void; onCancel: () => void;
 }) {
   const [radiusKm, setRadiusKm] = useState(3);
   const [cancelling, setCancelling] = useState(false);
@@ -348,6 +348,13 @@ export function ClientSearching({ requestId, onMatched, onCancel }: {
       <AppHeader title="Buscando profesional" />
       <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
         <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+        {notice && (
+          <div className="w-full flex items-start gap-2 p-3.5 rounded-xl border mb-6 text-left" style={{ background: "#FFFBEB", borderColor: "#FDE68A" }}>
+            <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-amber-700 leading-relaxed flex-1">{notice}</p>
+            {onDismissNotice && <button onClick={onDismissNotice} className="text-amber-500 flex-shrink-0"><X className="w-3.5 h-3.5" /></button>}
+          </div>
+        )}
         <div className="relative mb-8">
           <div className="w-24 h-24 rounded-full border-4 border-lime-200 flex items-center justify-center" style={{ borderTopColor: LIME, animation: "spin 1.2s linear infinite" }}>
             <Loader2 className="w-8 h-8" style={{ color: LIME }} />

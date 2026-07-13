@@ -4,17 +4,17 @@ import { getProfessionalJobHistory } from "@/lib/api";
 import type { RecentJob, JobHistoryEntry } from "@/lib/api";
 import {
   Bell, User, LogOut, Star, BadgeCheck, ToggleRight, ToggleLeft,
-  CheckCircle, FileCheck, ChevronDown, Award, ChevronRight, Phone, Mail, Check,
+  CheckCircle, FileCheck, ChevronDown, Award, ChevronRight, Phone, Mail, Check, AlertCircle, X,
 } from "lucide-react";
 import { NAVY, LIME, AppHeader, ScreenWrap, InputField, LimeBtn, DangerBtn, Card, StatusBadge, VerifBadge, LogoIcon, JobHistoryCard } from "../ui/primitives";
 import { specialtyLabel, SERVICES } from "../lib.local/mappers";
 import type { ProUser, JobStatus, ServiceRequest } from "../types.local";
 
 // ─── PRO DASHBOARD ────────────────────────────────────────────────────────────
-export function ProDashboard({ user, jobStatus, activeRequest, availableOffers, recentJobs, available, onToggleAvailable, onViewRequest, onViewOffer, onProfile, onDocuments, onLogout, onViewHistory }: {
+export function ProDashboard({ user, jobStatus, activeRequest, availableOffers, recentJobs, available, notice, onDismissNotice, onToggleAvailable, onViewRequest, onViewOffer, onProfile, onDocuments, onLogout, onViewHistory }: {
   user: ProUser; jobStatus: JobStatus; activeRequest: ServiceRequest | null; availableOffers: ServiceRequest[];
   recentJobs: RecentJob[];
-  available: boolean; onToggleAvailable: () => void;
+  available: boolean; notice?: string; onDismissNotice?: () => void; onToggleAvailable: () => void;
   onViewRequest: () => void; onViewOffer: (offer: ServiceRequest) => void; onProfile: () => void; onDocuments: () => void;
   onLogout: () => void; onViewHistory: () => void;
 }) {
@@ -67,6 +67,13 @@ export function ProDashboard({ user, jobStatus, activeRequest, availableOffers, 
         </div>
       </div>
       <div className="flex-1 overflow-y-auto p-4">
+        {notice && (
+          <div className="flex items-start gap-2 p-3.5 rounded-xl border mb-4" style={{ background: "#FFFBEB", borderColor: "#FDE68A" }}>
+            <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-amber-700 leading-relaxed flex-1">{notice}</p>
+            {onDismissNotice && <button onClick={onDismissNotice} className="text-amber-500 flex-shrink-0"><X className="w-3.5 h-3.5" /></button>}
+          </div>
+        )}
         {hasActiveJob && (
           <div onClick={onViewRequest} className="mb-4 p-4 rounded-2xl border cursor-pointer hover:shadow-md transition-all" style={{ borderColor: "#E5E7EB", background: "#F0FDF4" }}>
             <div className="flex items-center justify-between mb-2">

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { config } from "@/lib/config";
 import { distanceKm as haversineKm } from "@/lib/geo";
-import { acceptServiceRequest, rejectServiceRequest, cancelActiveJob, getQuickReplies, createQuickReply, deleteQuickReply } from "@/lib/api";
+import { acceptServiceRequest, rejectServiceRequest, cancelActiveJob, getQuickReplies, createQuickReply, deleteQuickReply, subscribeToJobChanges } from "@/lib/api";
 import type { ProReasonCode, QuickReply } from "@/lib/api";
 import type { GeoPoint } from "@/lib/types";
 import {
@@ -111,10 +111,10 @@ export function ProRequestDetail({ request, proLocation, onAccepted, onRejected,
 }
 
 // ─── PRO ACTIVE JOB ───────────────────────────────────────────────────────────
-export function ProActiveJob({ request, jobStatus, messages, professionalId, proLocation, onStatusChange, onSendMessage, onFinish, onCancelled, onBack }: {
+export function ProActiveJob({ request, jobStatus, messages, professionalId, proLocation, onStatusChange, onSendMessage, onFinish, onCancelled, onCancelledByClient, onBack }: {
   request: ServiceRequest; jobStatus: JobStatus; messages: Message[]; professionalId?: string; proLocation?: GeoPoint | null;
   onStatusChange: (s: JobStatus) => void; onSendMessage: (text: string) => void;
-  onFinish: (photoFiles: File[]) => Promise<void>; onCancelled: () => void; onBack: () => void;
+  onFinish: (photoFiles: File[]) => Promise<void>; onCancelled: () => void; onCancelledByClient: () => void; onBack: () => void;
 }) {
   const clientLoc = request.lat != null && request.lng != null ? { lat: request.lat, lng: request.lng } : null;
   const [tab, setTab] = useState<"job" | "chat">("job");
@@ -151,12 +151,28 @@ export function ProActiveJob({ request, jobStatus, messages, professionalId, pro
   const [showCancel, setShowCancel] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState("");
+  const ownCancelRef = useRef(false);
+  // Detecta si el CLIENTE cancela mientras el profesional está en esta
+  // pantalla: cancel_active_job libera la solicitud (professional_id vuelve
+  // a null, status a "pending"), pero la suscripción por professional_id
+  // del panel principal deja de matchear esa fila justo en ese cambio —
+  // por eso se necesita esta suscripción aparte, filtrada por el id de la
+  // solicitud (que no cambia), para enterarse sí o sí.
+  useEffect(() => {
+    if (config.MOCK_MODE || !request.id) return;
+    const unsubscribe = subscribeToJobChanges(request.id, row => {
+      if (row.status === "pending" && !ownCancelRef.current) onCancelledByClient();
+    });
+    return unsubscribe;
+  }, [request.id]);
   const handleCancel = async (reasonCode: string, reasonText?: string) => {
     setCancelling(true); setCancelError("");
+    ownCancelRef.current = true;
     try {
       if (!config.MOCK_MODE && request.id) await cancelActiveJob(request.id, reasonCode as ProReasonCode, reasonText);
       onCancelled();
     } catch (err: any) {
+      ownCancelRef.current = false;
       setCancelError(err?.message || "No se pudo cancelar el trabajo. Intenta de nuevo.");
       setCancelling(false);
     }

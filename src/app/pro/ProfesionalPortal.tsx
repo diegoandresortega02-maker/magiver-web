@@ -36,6 +36,7 @@ export function ProfesionalPortal() {
   const [proUser, setProUser] = useState<ProUser | null>(null);
   const [proDocuments, setProDocuments] = useState<DocumentSet | null>(null);
   const [checkingSession, setCheckingSession] = useState(!config.MOCK_MODE);
+  const [cancelNotice, setCancelNotice] = useState("");
 
   // Restaura la sesión si ya había una guardada (ver mismo fix en
   // ClientePortal) — antes siempre arrancaba en "auth" sin revisar si el
@@ -181,11 +182,11 @@ export function ProfesionalPortal() {
   if (screen === "documents") return <ProDocuments user={proUser!} onSubmit={handleDocSubmit} onBack={() => setScreen("register")} />;
   if (screen === "docview") return <ProDocuments user={proUser!} onSubmit={() => {}} onBack={() => setScreen("profile")} viewOnly docs={proDocuments ?? undefined} />;
   if (screen === "verify") return <ProVerify user={proUser!} onOpenAdmin={() => navigate("/admin")} />;
-  if (screen === "dashboard") return <ProDashboard user={proUser!} jobStatus={jobStatus} activeRequest={activeRequest} availableOffers={visibleOffers} recentJobs={recentJobs} available={available} onToggleAvailable={handleToggleAvailable} onViewRequest={() => setScreen("job")} onViewOffer={offer => { setSelectedOffer(offer); setScreen("request"); }} onProfile={() => setScreen("profile")} onDocuments={() => setScreen("docview")} onLogout={() => { logout(); resetMarketplace(); setProUser(null); navigate("/"); }} onViewHistory={() => setScreen("history")} />;
+  if (screen === "dashboard") return <ProDashboard user={proUser!} jobStatus={jobStatus} activeRequest={activeRequest} availableOffers={visibleOffers} recentJobs={recentJobs} available={available} notice={cancelNotice} onDismissNotice={() => setCancelNotice("")} onToggleAvailable={handleToggleAvailable} onViewRequest={() => setScreen("job")} onViewOffer={offer => { setSelectedOffer(offer); setScreen("request"); }} onProfile={() => setScreen("profile")} onDocuments={() => setScreen("docview")} onLogout={() => { logout(); resetMarketplace(); setProUser(null); navigate("/"); }} onViewHistory={() => setScreen("history")} />;
   if (screen === "history") return <ProJobHistory user={proUser!} onBack={() => setScreen("dashboard")} />;
   if (screen === "profile") return <ProProfile user={proUser!} onSave={u => { setProUser(u); setScreen("dashboard"); }} onDocuments={() => setScreen("docview")} onBack={() => setScreen("dashboard")} onLogout={() => { logout(); resetMarketplace(); setProUser(null); navigate("/"); }} />;
   if (screen === "request") return <ProRequestDetail request={selectedOffer ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} proLocation={proPosition} onAccepted={handleOfferAccepted} onRejected={handleOfferRejected} onBack={() => { setSelectedOffer(null); setScreen("dashboard"); }} />;
-  if (screen === "job") return <ProActiveJob request={activeRequest ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} jobStatus={jobStatus} messages={chatMessages} professionalId={proUser?.id} proLocation={proPosition} onStatusChange={handleProStatus} onSendMessage={handleProMsg} onFinish={handleJobFinish} onCancelled={() => { resetMarketplace(); setScreen("dashboard"); }} onBack={() => setScreen("dashboard")} />;
+  if (screen === "job") return <ProActiveJob request={activeRequest ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} jobStatus={jobStatus} messages={chatMessages} professionalId={proUser?.id} proLocation={proPosition} onStatusChange={handleProStatus} onSendMessage={handleProMsg} onFinish={handleJobFinish} onCancelled={() => { resetMarketplace(); setScreen("dashboard"); }} onCancelledByClient={() => { setCancelNotice("El cliente canceló esta solicitud."); resetMarketplace(); setScreen("dashboard"); }} onBack={() => setScreen("dashboard")} />;
   if (screen === "done") return <ProJobDone clientRating={clientRating} onHome={() => { resetMarketplace(); setScreen("dashboard"); }} />;
   return null;
 }

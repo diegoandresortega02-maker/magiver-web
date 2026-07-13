@@ -32,6 +32,7 @@ export function ClientePortal() {
   const [clientUser, setClientUser] = useState<ClientUser | null>(null);
   const [selectedService, setSelectedService] = useState("");
   const [checkingSession, setCheckingSession] = useState(!config.MOCK_MODE);
+  const [cancelNotice, setCancelNotice] = useState("");
 
   // Restaura la sesión si ya había una guardada (Supabase persiste el token
   // solo, esto evita pedir login de nuevo tras recargar la app o volver
@@ -99,8 +100,8 @@ export function ClientePortal() {
   if (screen === "services") return <ClientServices user={clientUser!} clientLocation={clientGeo.position} onSelect={s => { setSelectedService(s); setScreen("request"); }} onProfile={() => setScreen("profile")} onViewActiveRequests={() => setScreen("myRequests")} onBack={() => navigate("/")} />;
   if (screen === "myRequests") return <ClientActiveRequests user={clientUser!} onSelect={handleSelectRequest} onBack={() => setScreen("services")} />;
   if (screen === "request") return <ClientRequest service={selectedService} clientLocation={clientGeo.position} onSubmit={req => { setActiveRequest(req); setJobStatus("searching"); setScreen("searching"); }} onBack={() => setScreen("services")} />;
-  if (screen === "searching") return <ClientSearching requestId={activeRequest!.id!} onMatched={handleMatched} onCancel={() => { reset(); setScreen("services"); }} />;
-  if (screen === "tracking") return <ClientTracking pro={selectedPro!} request={activeRequest!} jobStatus={jobStatus} messages={chatMessages} clientLocation={clientGeo.position} onSendMessage={handleClientMsg} onComplete={() => setScreen("price")} onCancelled={() => { setJobStatus("searching"); setSelectedPro(null); setScreen("searching"); }} onBack={() => setScreen("services")} />;
+  if (screen === "searching") return <ClientSearching requestId={activeRequest!.id!} notice={cancelNotice} onDismissNotice={() => setCancelNotice("")} onMatched={handleMatched} onCancel={() => { reset(); setScreen("services"); }} />;
+  if (screen === "tracking") return <ClientTracking pro={selectedPro!} request={activeRequest!} jobStatus={jobStatus} messages={chatMessages} clientLocation={clientGeo.position} onSendMessage={handleClientMsg} onComplete={() => setScreen("price")} onCancelled={() => { setJobStatus("searching"); setSelectedPro(null); setScreen("searching"); }} onCancelledByProfessional={() => { setCancelNotice("El profesional canceló el servicio. Seguimos buscando a alguien más..."); setJobStatus("searching"); setSelectedPro(null); setScreen("searching"); }} onBack={() => setScreen("services")} />;
   if (screen === "price") return <ClientPricePaid pro={selectedPro!} requestId={activeRequest?.id} onDone={price => { setActiveRequest(activeRequest ? { ...activeRequest, agreedPrice: price } : activeRequest); setScreen("rate"); }} />;
   if (screen === "rate") return <ClientRate pro={selectedPro!} requestId={activeRequest?.id} onSubmit={r => { setClientRating(r); setScreen("done"); }} />;
   if (screen === "done") return <ClientDone pro={selectedPro!} rating={clientRating ?? 0} onAgain={() => { reset(); setScreen("services"); }} onHome={() => { reset(); navigate("/"); }} />;
