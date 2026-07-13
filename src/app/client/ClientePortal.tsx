@@ -2,19 +2,20 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { config } from "@/lib/config";
 import { loadSession, logout } from "@/lib/auth";
-import { getActiveRequestForClient, getProfessionalById } from "@/lib/api";
+import { getActiveRequestsForClient, getProfessionalById } from "@/lib/api";
+import type { ServiceRequest as ApiServiceRequest } from "@/lib/types";
 import { apiRequestToLocal, apiStatusToLocal, proUserToProfessional } from "../lib.local/mappers";
 import { useAppCtx, useChatMessages } from "../context/AppContext";
 import { useGeolocation } from "../hooks/useGeolocation";
 import { SessionLoading } from "../ui/primitives";
 import { ClientAuth, ClientProfile } from "./ClientAuthProfile";
 import { ClientHistory } from "./ClientHistory";
-import { ClientServices, ClientMap, ClientRequest, ClientSearching } from "./ClientJobFlow";
+import { ClientServices, ClientMap, ClientRequest, ClientSearching, ClientActiveRequests } from "./ClientJobFlow";
 import { ClientTracking, ClientPricePaid, ClientRate, ClientDone } from "./ClientTracking";
 import type { ClientUser, Professional } from "../types.local";
 
 // ─── PAGE: Cliente portal (/cliente) ─────────────────────────────────────────
-type CS = "auth" | "profile" | "history" | "services" | "request" | "searching" | "tracking" | "price" | "rate" | "done";
+type CS = "auth" | "profile" | "history" | "services" | "myRequests" | "request" | "searching" | "tracking" | "price" | "rate" | "done";
 
 export function ClientePortal() {
   const navigate = useNavigate();
@@ -35,9 +36,24 @@ export function ClientePortal() {
   // Restaura la sesión si ya había una guardada (Supabase persiste el token
   // solo, esto evita pedir login de nuevo tras recargar la app o volver
   // atrás — antes esto no se revisaba y siempre arrancaba en "auth").
-  // También retoma la solicitud en curso (buscando o ya aceptada) si había
-  // una, en vez de perderla y arrancar de cero en "servicios" — antes solo
-  // el profesional tenía este "apartado" de trabajo en curso.
+  // También retoma la(s) solicitud(es) en curso si había alguna, en vez de
+  // perderlas y arrancar de cero en "servicios". Con exactamente 1 activa,
+  // salta directo a su pantalla (igual que antes); con 2+ no se puede
+  // adivinar cuál mostrar, así que aterriza en "servicios", donde el botón
+  // "solicitudes en curso" lleva al listado completo.
+  // Fija la solicitud elegida (desde la restauración de sesión de abajo, o
+  // desde el listado "myRequests") como la que se está viendo ahora mismo, y
+  // navega a su pantalla correspondiente según su estado.
+  const handleSelectRequest = async (req: ApiServiceRequest & { professionalName?: string }) => {
+    setActiveRequest(apiRequestToLocal(req));
+    setJobStatus(apiStatusToLocal(req.status));
+    if (req.professionalId) {
+      const pro = await getProfessionalById(req.professionalId);
+      setSelectedPro(proUserToProfessional(pro, 0));
+    }
+    setScreen(req.status === "pending" ? "searching" : "tracking");
+  };
+
   useEffect(() => {
     if (config.MOCK_MODE) return;
     let active = true;
@@ -46,15 +62,9 @@ export function ClientePortal() {
       const user = session.user as ClientUser;
       setClientUser(user);
       try {
-        const req = user.id ? await getActiveRequestForClient(user.id) : null;
-        if (active && req) {
-          setActiveRequest(apiRequestToLocal(req));
-          setJobStatus(apiStatusToLocal(req.status));
-          if (req.professionalId) {
-            const pro = await getProfessionalById(req.professionalId);
-            if (active) setSelectedPro(proUserToProfessional(pro, 0));
-          }
-          setScreen(req.status === "pending" ? "searching" : "tracking");
+        const reqs = user.id ? await getActiveRequestsForClient(user.id) : [];
+        if (active && reqs.length === 1) {
+          await handleSelectRequest(reqs[0]);
           return;
         }
       } catch { /* si falla, cae a "services" abajo */ }
@@ -86,7 +96,8 @@ export function ClientePortal() {
   if (screen === "auth") return <ClientAuth onDone={u => { setClientUser(u); setScreen("services"); }} onBack={() => navigate("/")} />;
   if (screen === "profile") return <ClientProfile user={clientUser!} onSave={u => { setClientUser(u); setScreen("services"); }} onBack={() => setScreen("services")} onLogout={() => { logout(); reset(); setClientUser(null); setScreen("auth"); navigate("/"); }} onViewHistory={() => setScreen("history")} />;
   if (screen === "history") return <ClientHistory user={clientUser!} onBack={() => setScreen("profile")} />;
-  if (screen === "services") return <ClientServices user={clientUser!} clientLocation={clientGeo.position} onSelect={s => { setSelectedService(s); setScreen("request"); }} onProfile={() => setScreen("profile")} onBack={() => navigate("/")} />;
+  if (screen === "services") return <ClientServices user={clientUser!} clientLocation={clientGeo.position} onSelect={s => { setSelectedService(s); setScreen("request"); }} onProfile={() => setScreen("profile")} onViewActiveRequests={() => setScreen("myRequests")} onBack={() => navigate("/")} />;
+  if (screen === "myRequests") return <ClientActiveRequests user={clientUser!} onSelect={handleSelectRequest} onBack={() => setScreen("services")} />;
   if (screen === "request") return <ClientRequest service={selectedService} clientLocation={clientGeo.position} onSubmit={req => { setActiveRequest(req); setJobStatus("searching"); setScreen("searching"); }} onBack={() => setScreen("services")} />;
   if (screen === "searching") return <ClientSearching requestId={activeRequest!.id!} onMatched={handleMatched} onCancel={() => { reset(); setScreen("services"); }} />;
   if (screen === "tracking") return <ClientTracking pro={selectedPro!} request={activeRequest!} jobStatus={jobStatus} messages={chatMessages} clientLocation={clientGeo.position} onSendMessage={handleClientMsg} onComplete={() => setScreen("price")} onCancelled={() => { setJobStatus("searching"); setSelectedPro(null); setScreen("searching"); }} onBack={() => setScreen("services")} />;

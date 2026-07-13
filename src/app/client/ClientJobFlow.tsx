@@ -1,20 +1,29 @@
 import { useState, useEffect } from "react";
 import { config } from "@/lib/config";
-import { getNearbyProfessionals, createServiceRequest, updateJobStatus, getProfessionalById, subscribeToJobChanges, getJobById } from "@/lib/api";
-import type { GeoPoint } from "@/lib/types";
+import { getNearbyProfessionals, createServiceRequest, updateJobStatus, getProfessionalById, subscribeToJobChanges, getJobById, getActiveRequestsForClient } from "@/lib/api";
+import type { GeoPoint, ServiceRequest as ApiServiceRequest } from "@/lib/types";
 import {
   MapPin, Star, BadgeCheck, Clock, MessageSquare, Send, ArrowRight,
   Loader2, AlertCircle, Edit3, Zap,
 } from "lucide-react";
-import { NAVY, LIME, LIGHT, AppHeader, ScreenWrap, ProAvatar, LimeBtn, DangerBtn } from "../ui/primitives";
+import { NAVY, LIME, LIGHT, AppHeader, ScreenWrap, ProAvatar, LimeBtn, DangerBtn, Card, StatusBadge } from "../ui/primitives";
 import { LiveMap, RealMap } from "../maps/RealMap";
 import { reverseGeocode } from "../maps/googleMaps";
-import { SERVICES, PROFESSIONALS, proUserToProfessional } from "../lib.local/mappers";
+import { SERVICES, PROFESSIONALS, proUserToProfessional, specialtyLabel, apiStatusToLocal } from "../lib.local/mappers";
 import { subscribeToPushNotifications } from "../hooks/usePushSubscription";
 import type { ClientUser, Professional, ServiceRequest } from "../types.local";
 
 // ─── CLIENT SERVICES ─────────────────────────────────────────────────────────
-export function ClientServices({ user, clientLocation, onSelect, onProfile, onBack }: { user: ClientUser; clientLocation?: GeoPoint | null; onSelect: (s: string) => void; onProfile: () => void; onBack: () => void }) {
+export function ClientServices({ user, clientLocation, onSelect, onProfile, onViewActiveRequests, onBack }: { user: ClientUser; clientLocation?: GeoPoint | null; onSelect: (s: string) => void; onProfile: () => void; onViewActiveRequests: () => void; onBack: () => void }) {
+  const [activeCount, setActiveCount] = useState(0);
+  const [activeCategories, setActiveCategories] = useState<string[]>([]);
+  useEffect(() => {
+    if (config.MOCK_MODE || !user.id) return;
+    getActiveRequestsForClient(user.id).then(reqs => {
+      setActiveCount(reqs.length);
+      setActiveCategories(reqs.map(r => specialtyLabel(r.category)));
+    }).catch(() => {});
+  }, [user.id]);
   return (
     <ScreenWrap>
       <AppHeader title="MAGIVER" onBack={onBack}
@@ -22,11 +31,20 @@ export function ClientServices({ user, clientLocation, onSelect, onProfile, onBa
       />
       <div className="flex-1 overflow-y-auto p-5">
         <div className="mb-6"><h2 className="text-2xl font-black mb-1" style={{ color: NAVY }}>¿Qué necesitas, {user.name.split(" ")[0]}?</h2><p className="text-slate-500 text-sm">Selecciona el tipo de servicio</p></div>
-        <div className="flex items-center gap-2 px-4 py-3 rounded-xl border mb-6 bg-white" style={{ borderColor: "#E5E7EB" }}>
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl border mb-4 bg-white" style={{ borderColor: "#E5E7EB" }}>
           <MapPin className="w-4 h-4 flex-shrink-0" style={{ color: LIME }} />
           <span className="text-sm text-slate-600 flex-1">{clientLocation ? `${clientLocation.lat.toFixed(4)}, ${clientLocation.lng.toFixed(4)}` : "Santa Cruz de la Sierra (aprox.)"}</span>
           <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: clientLocation ? "#F0FDF4" : "#FEF3C7", color: clientLocation ? "#16A34A" : "#B45309" }}>{clientLocation ? "GPS activo" : "Ubicación aprox."}</span>
         </div>
+        {activeCount > 0 && (
+          <button onClick={onViewActiveRequests} className="w-full flex items-center justify-between px-4 py-3.5 rounded-xl border-2 mb-6 text-left" style={{ borderColor: LIME, background: "#F7FEE7" }}>
+            <div>
+              <p className="font-bold text-sm" style={{ color: NAVY }}>Tienes {activeCount} solicitud{activeCount > 1 ? "es" : ""} en curso</p>
+              <p className="text-xs text-slate-500 mt-0.5">{activeCategories.join(" · ")}</p>
+            </div>
+            <ArrowRight className="w-4 h-4 flex-shrink-0" style={{ color: LIME }} />
+          </button>
+        )}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {SERVICES.map(svc => (
             <div key={svc.id} onClick={() => onSelect(svc.label)} className="bg-white rounded-2xl p-4 border cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all" style={{ borderColor: "#E5E7EB" }}>
@@ -35,6 +53,44 @@ export function ClientServices({ user, clientLocation, onSelect, onProfile, onBa
             </div>
           ))}
         </div>
+      </div>
+    </ScreenWrap>
+  );
+}
+
+// ─── CLIENT ACTIVE REQUESTS (listado de solicitudes en curso) ────────────────
+export function ClientActiveRequests({ user, onSelect, onBack }: {
+  user: ClientUser;
+  onSelect: (req: ApiServiceRequest & { professionalName?: string }) => void;
+  onBack: () => void;
+}) {
+  const [requests, setRequests] = useState<(ApiServiceRequest & { professionalName?: string })[]>([]);
+  const [loading, setLoading] = useState(!config.MOCK_MODE);
+  useEffect(() => {
+    if (config.MOCK_MODE || !user.id) return;
+    getActiveRequestsForClient(user.id).then(setRequests).catch(() => {}).finally(() => setLoading(false));
+  }, [user.id]);
+  return (
+    <ScreenWrap>
+      <AppHeader title="Solicitudes en curso" onBack={onBack} />
+      <div className="flex-1 overflow-y-auto p-4">
+        {loading ? (
+          <p className="text-sm text-slate-400 text-center py-8">Cargando...</p>
+        ) : requests.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-8">No tienes solicitudes en curso.</p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {requests.map(req => (
+              <Card key={req.id} onClick={() => onSelect(req)}>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="font-semibold text-sm" style={{ color: NAVY }}>{specialtyLabel(req.category)}</p>
+                  <StatusBadge status={apiStatusToLocal(req.status)} />
+                </div>
+                <p className="text-xs text-slate-500">{req.professionalName ? `${req.professionalName} · ` : ""}{[req.address.street, req.address.zone].filter(Boolean).join(", ")}</p>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
     </ScreenWrap>
   );
