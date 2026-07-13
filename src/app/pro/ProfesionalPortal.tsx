@@ -153,9 +153,9 @@ export function ProfesionalPortal() {
       updateJobStatus(activeRequest.id, status).catch(() => {});
     }
   };
-  const handleJobFinish = async (photoFiles: File[]) => {
+  const handleJobFinish = async (photoFiles: File[], note?: string) => {
     if (!config.MOCK_MODE && activeRequest?.id) {
-      await uploadJobPhoto(activeRequest.id, photoFiles);
+      await uploadJobPhoto(activeRequest.id, photoFiles, note);
       await updateJobStatus(activeRequest.id, "completed");
     }
     setScreen("done");

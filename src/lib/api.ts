@@ -210,6 +210,7 @@ export interface JobHistoryEntry {
   rating?: number;
   agreedPrice?: number;
   photoUrls: string[];
+  notes?: string;
 }
 
 function rowToJobHistoryEntry(row: any, counterpartTable: "clients" | "professionals", fallbackName: string): JobHistoryEntry {
@@ -223,6 +224,7 @@ function rowToJobHistoryEntry(row: any, counterpartTable: "clients" | "professio
     rating: Array.isArray(row.reviews) ? row.reviews[0]?.rating : row.reviews?.rating,
     agreedPrice: row.agreed_price != null ? Number(row.agreed_price) : undefined,
     photoUrls: row.completion_photo_urls ?? [],
+    notes: row.completion_notes ?? undefined,
   };
 }
 
@@ -233,7 +235,7 @@ export async function getProfessionalJobHistory(professionalId: string): Promise
   if (config.MOCK_MODE) return [];
   const { data, error } = await supabase
     .from("service_requests")
-    .select("id, category, completed_at, created_at, agreed_price, completion_photo_urls, clients(name), reviews(rating)")
+    .select("id, category, completed_at, created_at, agreed_price, completion_photo_urls, completion_notes, clients(name), reviews(rating)")
     .eq("professional_id", professionalId)
     .in("status", ["completed", "rated"])
     .order("completed_at", { ascending: false });
@@ -247,7 +249,7 @@ export async function getClientRequestHistory(clientId: string): Promise<JobHist
   if (config.MOCK_MODE) return [];
   const { data, error } = await supabase
     .from("service_requests")
-    .select("id, category, completed_at, created_at, agreed_price, completion_photo_urls, professionals(name), reviews(rating)")
+    .select("id, category, completed_at, created_at, agreed_price, completion_photo_urls, completion_notes, professionals(name), reviews(rating)")
     .eq("client_id", clientId)
     .in("status", ["completed", "rated"])
     .order("completed_at", { ascending: false });
@@ -650,7 +652,7 @@ export async function uploadDocument(
 
 // ─── Foto de trabajo terminado ────────────────────────────────────────────────
 
-export async function uploadJobPhoto(requestId: string, files: File[]): Promise<{ urls: string[] }> {
+export async function uploadJobPhoto(requestId: string, files: File[], note?: string): Promise<{ urls: string[] }> {
   if (config.MOCK_MODE) {
     await delay(1200);
     return { urls: files.map(f => `https://storage.magiver.com/jobs/${requestId}/${f.name}`) };
@@ -667,7 +669,7 @@ export async function uploadJobPhoto(requestId: string, files: File[]): Promise<
     urls.push(signed.signedUrl);
   }
 
-  const { error: updateError } = await supabase.from("service_requests").update({ completion_photo_urls: urls }).eq("id", requestId);
+  const { error: updateError } = await supabase.from("service_requests").update({ completion_photo_urls: urls, completion_notes: note?.trim() || null }).eq("id", requestId);
   if (updateError) throw { code: "db_error", message: updateError.message };
 
   return { urls };

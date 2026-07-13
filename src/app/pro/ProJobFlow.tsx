@@ -114,9 +114,10 @@ export function ProRequestDetail({ request, proLocation, onAccepted, onRejected,
 export function ProActiveJob({ request, jobStatus, messages, professionalId, proLocation, onStatusChange, onSendMessage, onFinish, onCancelled, onCancelledByClient, onBack }: {
   request: ServiceRequest; jobStatus: JobStatus; messages: Message[]; professionalId?: string; proLocation?: GeoPoint | null;
   onStatusChange: (s: JobStatus) => void; onSendMessage: (text: string) => void;
-  onFinish: (photoFiles: File[]) => Promise<void>; onCancelled: () => void; onCancelledByClient: () => void; onBack: () => void;
+  onFinish: (photoFiles: File[], note?: string) => Promise<void>; onCancelled: () => void; onCancelledByClient: () => void; onBack: () => void;
 }) {
   const clientLoc = request.lat != null && request.lng != null ? { lat: request.lat, lng: request.lng } : null;
+  const [completionNote, setCompletionNote] = useState("");
   const [tab, setTab] = useState<"job" | "chat">("job");
   const [msg, setMsg] = useState("");
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
@@ -269,6 +270,14 @@ export function ProActiveJob({ request, jobStatus, messages, professionalId, pro
                     </label>
                   )}
                 </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: NAVY }}>
+                    Nota del trabajo realizado (opcional)
+                  </label>
+                  <textarea value={completionNote} onChange={e => setCompletionNote(e.target.value)} rows={3}
+                    placeholder="Ej: Se completó la instalación con el cambio de los grifos solicitados."
+                    className="w-full px-4 py-3 rounded-xl border text-sm outline-none bg-white resize-none" style={{ borderColor: "#E5E7EB", color: NAVY }} />
+                </div>
                 {finishError && (
                   <p className="text-xs font-medium flex items-center gap-1.5" style={{ color: "#EF4444" }}>
                     <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />{finishError}
@@ -277,7 +286,7 @@ export function ProActiveJob({ request, jobStatus, messages, professionalId, pro
                 <LimeBtn onClick={async () => {
                   if (photoFiles.length === 0) return;
                   setFinishError(""); setFinishing(true);
-                  try { await onFinish(photoFiles); }
+                  try { await onFinish(photoFiles, completionNote); }
                   catch (err: any) { setFinishError(err?.message || "No se pudo finalizar el trabajo. Intenta de nuevo."); }
                   finally { setFinishing(false); }
                 }} disabled={photoFiles.length === 0 || finishing} className="w-full py-4 text-base">

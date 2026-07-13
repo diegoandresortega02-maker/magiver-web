@@ -40,6 +40,7 @@ export function ClientHistory({ user, onBack }: { user: ClientUser; onBack: () =
                 rating={job.rating}
                 amount={job.agreedPrice}
                 photoUrls={job.photoUrls}
+                notes={job.notes}
               />
             ))}
           </div>

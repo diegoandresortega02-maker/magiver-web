@@ -229,9 +229,9 @@ export function Card({ children, className = "", onClick }: {
   );
 }
 
-export function JobHistoryCard({ categoryLabel, counterpartName, dateLabel, rating, amount, photoUrls }: {
+export function JobHistoryCard({ categoryLabel, counterpartName, dateLabel, rating, amount, photoUrls, notes }: {
   categoryLabel: string; counterpartName: string; dateLabel: string;
-  rating?: number; amount?: number; photoUrls: string[];
+  rating?: number; amount?: number; photoUrls: string[]; notes?: string;
 }) {
   return (
     <Card>
@@ -245,6 +245,7 @@ export function JobHistoryCard({ categoryLabel, counterpartName, dateLabel, rati
           {[...Array(rating)].map((_, i) => <Star key={i} className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />)}
         </div>
       )}
+      {notes && <p className="text-xs text-slate-600 mt-1 leading-relaxed">{notes}</p>}
       {photoUrls.length > 0 && (
         <div className="flex gap-2 mt-2">
           {photoUrls.map((url, i) => (

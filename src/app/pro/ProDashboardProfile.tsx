@@ -182,6 +182,7 @@ export function ProJobHistory({ user, onBack }: { user: ProUser; onBack: () => v
                 rating={job.rating}
                 amount={job.agreedPrice}
                 photoUrls={job.photoUrls}
+                notes={job.notes}
               />
             ))}
           </div>
