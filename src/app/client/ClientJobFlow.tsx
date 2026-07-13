@@ -4,7 +4,7 @@ import { getNearbyProfessionals, createServiceRequest, updateJobStatus, getProfe
 import type { GeoPoint, ServiceRequest as ApiServiceRequest } from "@/lib/types";
 import {
   MapPin, Star, BadgeCheck, Clock, MessageSquare, Send, ArrowRight,
-  Loader2, AlertCircle, Edit3, Zap, X,
+  Loader2, AlertCircle, Edit3, Zap, X, Search,
 } from "lucide-react";
 import { NAVY, LIME, LIGHT, AppHeader, ScreenWrap, ProAvatar, LimeBtn, DangerBtn, Card, StatusBadge } from "../ui/primitives";
 import { LiveMap, RealMap } from "../maps/RealMap";
@@ -14,9 +14,12 @@ import { subscribeToPushNotifications } from "../hooks/usePushSubscription";
 import type { ClientUser, Professional, ServiceRequest } from "../types.local";
 
 // ─── CLIENT SERVICES ─────────────────────────────────────────────────────────
+const normalize = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
 export function ClientServices({ user, clientLocation, onSelect, onProfile, onViewActiveRequests, onBack }: { user: ClientUser; clientLocation?: GeoPoint | null; onSelect: (s: string) => void; onProfile: () => void; onViewActiveRequests: () => void; onBack: () => void }) {
   const [activeCount, setActiveCount] = useState(0);
   const [activeCategories, setActiveCategories] = useState<string[]>([]);
+  const [query, setQuery] = useState("");
   useEffect(() => {
     if (config.MOCK_MODE || !user.id) return;
     getActiveRequestsForClient(user.id).then(reqs => {
@@ -24,6 +27,7 @@ export function ClientServices({ user, clientLocation, onSelect, onProfile, onVi
       setActiveCategories(reqs.map(r => specialtyLabel(r.category)));
     }).catch(() => {});
   }, [user.id]);
+  const visibleServices = SERVICES.filter(s => s.id !== "otro" && normalize(s.label).includes(normalize(query)));
   return (
     <ScreenWrap>
       <AppHeader title="MAGIVER" onBack={onBack}
@@ -45,14 +49,23 @@ export function ClientServices({ user, clientLocation, onSelect, onProfile, onVi
             <ArrowRight className="w-4 h-4 flex-shrink-0" style={{ color: LIME }} />
           </button>
         )}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {SERVICES.map(svc => (
-            <div key={svc.id} onClick={() => onSelect(svc.label)} className="bg-white rounded-2xl p-4 border cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all" style={{ borderColor: "#E5E7EB" }}>
-              <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-3" style={{ background: svc.color + "1A" }}><svc.icon className="w-6 h-6" style={{ color: svc.color }} /></div>
-              <p className="font-bold text-sm" style={{ color: NAVY }}>{svc.label}</p>
-            </div>
-          ))}
+        <div className="relative mb-5">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input type="text" value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar servicio (plomero, pintor...)"
+            className="w-full pl-9 pr-4 py-3 rounded-xl border text-sm outline-none bg-white" style={{ borderColor: "#E5E7EB", color: NAVY }} />
         </div>
+        {visibleServices.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-8">No encontramos ese servicio.</p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {visibleServices.map(svc => (
+              <div key={svc.id} onClick={() => onSelect(svc.label)} className="bg-white rounded-2xl p-4 border cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all" style={{ borderColor: "#E5E7EB" }}>
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-3" style={{ background: svc.color + "1A" }}><svc.icon className="w-6 h-6" style={{ color: svc.color }} /></div>
+                <p className="font-bold text-sm" style={{ color: NAVY }}>{svc.label}</p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </ScreenWrap>
   );
