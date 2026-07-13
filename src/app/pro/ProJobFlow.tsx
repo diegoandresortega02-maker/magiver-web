@@ -111,11 +111,12 @@ export function ProRequestDetail({ request, proLocation, onAccepted, onRejected,
 }
 
 // ─── PRO ACTIVE JOB ───────────────────────────────────────────────────────────
-export function ProActiveJob({ request, jobStatus, messages, professionalId, onStatusChange, onSendMessage, onFinish, onCancelled, onBack }: {
-  request: ServiceRequest; jobStatus: JobStatus; messages: Message[]; professionalId?: string;
+export function ProActiveJob({ request, jobStatus, messages, professionalId, proLocation, onStatusChange, onSendMessage, onFinish, onCancelled, onBack }: {
+  request: ServiceRequest; jobStatus: JobStatus; messages: Message[]; professionalId?: string; proLocation?: GeoPoint | null;
   onStatusChange: (s: JobStatus) => void; onSendMessage: (text: string) => void;
   onFinish: (photoFiles: File[]) => Promise<void>; onCancelled: () => void; onBack: () => void;
 }) {
+  const clientLoc = request.lat != null && request.lng != null ? { lat: request.lat, lng: request.lng } : null;
   const [tab, setTab] = useState<"job" | "chat">("job");
   const [msg, setMsg] = useState("");
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
@@ -186,6 +187,17 @@ export function ProActiveJob({ request, jobStatus, messages, professionalId, onS
               <p className="text-sm text-slate-500 mt-1 leading-relaxed">{request.description}</p>
               <div className="flex items-center gap-2 mt-2 text-sm text-slate-500"><MapPin className="w-4 h-4 flex-shrink-0" style={{ color: LIME }} />{request.address}</div>
             </Card>
+            {jobStatus !== "completado" && (
+              <div className="mb-5">
+                <LiveMap
+                  markers={[
+                    ...(clientLoc ? [{ id: "cliente", lat: clientLoc.lat, lng: clientLoc.lng, label: request.clientName?.slice(0, 2).toUpperCase() ?? "CL", color: "#8B5CF6" }] : []),
+                    ...(proLocation ? [{ id: "yo", lat: proLocation.lat, lng: proLocation.lng, label: "Tú", color: LIME, labelColor: NAVY }] : []),
+                  ]}
+                  fallback={<MapView selectedProId="1" />}
+                />
+              </div>
+            )}
             <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Actualizar estado del trabajo</p>
             <div className="flex flex-col gap-3 mb-5">
               {steps.map(btn => {
