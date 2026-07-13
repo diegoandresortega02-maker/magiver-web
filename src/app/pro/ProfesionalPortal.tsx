@@ -16,11 +16,11 @@ import { subscribeToPushNotifications } from "../hooks/usePushSubscription";
 import { apiStatusToLocal, apiRequestToLocal } from "../lib.local/mappers";
 import { ProAuth, ProRegister, ProDocuments, ProVerify } from "./ProAuthRegister";
 import { ProDashboard, ProProfile, ProJobHistory } from "./ProDashboardProfile";
-import { ProRequestDetail, ProActiveJob, ProJobDone } from "./ProJobFlow";
+import { ProRequestDetail, ProActiveJob, ProRateClient, ProJobDone } from "./ProJobFlow";
 import type { ProUser, DocumentSet, JobStatus, ServiceRequest } from "../types.local";
 
 // ─── PAGE: Profesional portal (/profesional) ──────────────────────────────────
-type PS = "auth" | "register" | "documents" | "docview" | "verify" | "dashboard" | "profile" | "history" | "request" | "job" | "done";
+type PS = "auth" | "register" | "documents" | "docview" | "verify" | "dashboard" | "profile" | "history" | "request" | "job" | "rateClient" | "done";
 
 export function ProfesionalPortal() {
   const navigate = useNavigate();
@@ -158,7 +158,7 @@ export function ProfesionalPortal() {
       await uploadJobPhoto(activeRequest.id, photoFiles, note);
       await updateJobStatus(activeRequest.id, "completed");
     }
-    setScreen("done");
+    setScreen("rateClient");
   };
   // Los documentos ya quedaron guardados en Supabase durante la subida (ver
   // ProDocuments/handleFile); acá solo se conserva una copia local para la
@@ -187,6 +187,7 @@ export function ProfesionalPortal() {
   if (screen === "profile") return <ProProfile user={proUser!} onSave={u => { setProUser(u); setScreen("dashboard"); }} onDocuments={() => setScreen("docview")} onBack={() => setScreen("dashboard")} onLogout={() => { logout(); resetMarketplace(); setProUser(null); navigate("/"); }} />;
   if (screen === "request") return <ProRequestDetail request={selectedOffer ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} proLocation={proPosition} onAccepted={handleOfferAccepted} onRejected={handleOfferRejected} onBack={() => { setSelectedOffer(null); setScreen("dashboard"); }} />;
   if (screen === "job") return <ProActiveJob request={activeRequest ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} jobStatus={jobStatus} messages={chatMessages} professionalId={proUser?.id} proLocation={proPosition} onStatusChange={handleProStatus} onSendMessage={handleProMsg} onFinish={handleJobFinish} onCancelled={() => { resetMarketplace(); setScreen("dashboard"); }} onCancelledByClient={() => { setCancelNotice("El cliente canceló esta solicitud."); resetMarketplace(); setScreen("dashboard"); }} onBack={() => setScreen("dashboard")} />;
+  if (screen === "rateClient") return <ProRateClient clientName={activeRequest?.clientName} requestId={activeRequest?.id} onSubmit={() => setScreen("done")} />;
   if (screen === "done") return <ProJobDone clientRating={clientRating} onHome={() => { resetMarketplace(); setScreen("dashboard"); }} />;
   return null;
 }

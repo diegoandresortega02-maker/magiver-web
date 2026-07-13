@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from "react";
 import { config } from "@/lib/config";
 import { distanceKm as haversineKm } from "@/lib/geo";
-import { acceptServiceRequest, rejectServiceRequest, cancelActiveJob, getQuickReplies, createQuickReply, deleteQuickReply, subscribeToJobChanges } from "@/lib/api";
+import { acceptServiceRequest, rejectServiceRequest, cancelActiveJob, getQuickReplies, createQuickReply, deleteQuickReply, subscribeToJobChanges, submitClientRating } from "@/lib/api";
 import type { ProReasonCode, QuickReply } from "@/lib/api";
 import type { GeoPoint } from "@/lib/types";
 import {
-  MapPin, AlertCircle, Loader2, CheckCircle, Car, Check, Upload, Award, Send, Zap, Star, X, Plus,
+  MapPin, AlertCircle, Loader2, CheckCircle, Car, Check, Upload, Award, Send, Zap, Star, X, Plus, ThumbsUp, User,
 } from "lucide-react";
 import { NAVY, LIME, AppHeader, ScreenWrap, Card, StatusBadge, LimeBtn, DangerBtn, ReasonPickerSheet } from "../ui/primitives";
 import { LiveMap } from "../maps/RealMap";
@@ -353,6 +353,63 @@ export function ProActiveJob({ request, jobStatus, messages, professionalId, pro
           onClose={() => setShowCancel(false)}
         />
       )}
+    </ScreenWrap>
+  );
+}
+
+// ─── PRO RATE CLIENT ──────────────────────────────────────────────────────────
+export function ProRateClient({ clientName, requestId, onSubmit }: { clientName?: string; requestId?: string; onSubmit: () => void }) {
+  const [rating, setRating] = useState(0); const [hovered, setHovered] = useState(0); const [comment, setComment] = useState(""); const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const labels = ["", "Malo", "Regular", "Bueno", "Muy bueno", "Excelente"];
+  const handleSubmit = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      if (!config.MOCK_MODE && requestId) {
+        await submitClientRating({ requestId, rating, comment: comment || undefined });
+      } else {
+        await new Promise(r => setTimeout(r, 800));
+      }
+      onSubmit();
+    } catch (err: any) {
+      setError(err?.message || "No se pudo enviar la calificación. Intenta de nuevo.");
+    } finally {
+      setLoading(false);
+    }
+  };
+  return (
+    <ScreenWrap>
+      <AppHeader title="Calificar cliente" />
+      <div className="flex-1 flex flex-col items-center justify-center p-6">
+        <div className="w-full max-w-sm">
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto" style={{ background: "#8B5CF6" }}><User className="w-7 h-7 text-white" /></div>
+            <h2 className="text-2xl font-black mt-4 mb-1" style={{ color: NAVY }}>¿Cómo fue trabajar con {clientName?.split(" ")[0] ?? "el cliente"}?</h2>
+          </div>
+          <div className="flex justify-center gap-3 mb-3">
+            {[1, 2, 3, 4, 5].map(n => (
+              <button key={n} onMouseEnter={() => setHovered(n)} onMouseLeave={() => setHovered(0)} onClick={() => setRating(n)} className="transition-transform hover:scale-110 active:scale-90">
+                <Star className="w-10 h-10 transition-colors" style={{ color: n <= (hovered || rating) ? "#F59E0B" : "#E5E7EB", fill: n <= (hovered || rating) ? "#FBBF24" : "none" }} />
+              </button>
+            ))}
+          </div>
+          {(hovered || rating) > 0 && <p className="text-center font-semibold mb-6" style={{ color: NAVY }}>{labels[hovered || rating]}</p>}
+          <div className="mb-6">
+            <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: NAVY }}>Comentario (opcional)</label>
+            <textarea value={comment} onChange={e => setComment(e.target.value)} placeholder="Cuéntanos cómo fue tu experiencia..." rows={3} className="w-full px-4 py-3 rounded-xl border text-sm outline-none bg-white resize-none" style={{ borderColor: "#E5E7EB", color: NAVY }} />
+          </div>
+          {error && (
+            <p className="text-xs font-medium flex items-center gap-1.5 mb-3" style={{ color: "#EF4444" }}>
+              <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />{error}
+            </p>
+          )}
+          <LimeBtn onClick={handleSubmit} disabled={!rating || loading} className="w-full py-4 text-base">
+            {loading ? <><Loader2 className="w-4 h-4 animate-spin" />Enviando...</> : <>Enviar calificación <ThumbsUp className="w-4 h-4" /></>}
+          </LimeBtn>
+          <button onClick={onSubmit} className="w-full mt-3 text-sm text-slate-400 hover:text-slate-600 transition-colors">Omitir por ahora</button>
+        </div>
+      </div>
     </ScreenWrap>
   );
 }

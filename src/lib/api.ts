@@ -580,6 +580,27 @@ export async function submitReview(data: {
   return { id: review.id, requestId: review.request_id, fromClientId: review.from_client_id, toProfessionalId: review.to_professional_id, rating: review.rating, comment: review.comment ?? undefined, createdAt: review.created_at };
 }
 
+// El profesional califica al cliente (dirección inversa a submitReview) —
+// mismo patrón, tabla separada (client_ratings) porque reviews tiene la
+// forma fija cliente→profesional.
+export async function submitClientRating(data: {
+  requestId: string; rating: number; comment?: string;
+}): Promise<void> {
+  if (config.MOCK_MODE) { await delay(600); return; }
+  const { data: userData } = await supabase.auth.getUser();
+  const professionalId = userData.user?.id;
+  if (!professionalId) throw { code: "not_authenticated", message: "Debes iniciar sesión para calificar." };
+
+  const { data: req, error: reqError } = await supabase.from("service_requests").select("client_id").eq("id", data.requestId).single();
+  if (reqError || !req?.client_id) throw { code: "db_error", message: "No se encontró el cliente de esta solicitud." };
+
+  const { error } = await supabase.from("client_ratings").insert({
+    request_id: data.requestId, from_professional_id: professionalId, to_client_id: req.client_id,
+    rating: data.rating, comment: data.comment,
+  });
+  if (error) throw { code: "db_error", message: error.message };
+}
+
 // ─── Registro de profesional ──────────────────────────────────────────────────
 
 export interface RegisterProPayload {

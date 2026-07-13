@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { config } from "@/lib/config";
 import { updateJobStatus, submitReview, cancelActiveJob, subscribeToProfessionalLocation, subscribeToJobChanges } from "@/lib/api";
 import type { ClientReasonCode } from "@/lib/api";
-import type { GeoPoint } from "@/lib/types";
+import type { GeoPoint, JobStatus as ApiJobStatus } from "@/lib/types";
 import {
   MessageSquare, CheckCircle, Car, MapPin, Award, Star, Send,
   DollarSign, ArrowRight, ThumbsUp, AlertCircle, Loader2, BadgeCheck,
@@ -14,10 +14,10 @@ import { CLIENT_REASONS } from "../lib.local/mappers";
 import type { Professional, ServiceRequest, JobStatus, Message } from "../types.local";
 
 // ─── CLIENT TRACKING ──────────────────────────────────────────────────────────
-export function ClientTracking({ pro, request, jobStatus, messages, clientLocation, onSendMessage, onComplete, onCancelled, onCancelledByProfessional, onBack }: {
+export function ClientTracking({ pro, request, jobStatus, messages, clientLocation, onSendMessage, onComplete, onCancelled, onCancelledByProfessional, onRequestUpdate, onBack }: {
   pro: Professional; request: ServiceRequest; jobStatus: JobStatus;
   messages: Message[]; clientLocation?: GeoPoint | null; onSendMessage: (text: string) => void;
-  onComplete: () => void; onCancelled: () => void; onCancelledByProfessional: () => void; onBack: () => void;
+  onComplete: () => void; onCancelled: () => void; onCancelledByProfessional: () => void; onRequestUpdate: (row: { status: ApiJobStatus; agreedPrice?: number }) => void; onBack: () => void;
 }) {
   const [tab, setTab] = useState<"track" | "chat">("track");
   const [msg, setMsg] = useState("");
@@ -36,14 +36,16 @@ export function ClientTracking({ pro, request, jobStatus, messages, clientLocati
     const unsubscribe = subscribeToProfessionalLocation(pro.id, setLiveProLocation);
     return unsubscribe;
   }, [pro.id]);
-  // Detecta si el PROFESIONAL cancela mientras el cliente está viendo esta
-  // pantalla: cancel_active_job libera la solicitud (vuelve a "pending"),
-  // pero sin esto el cliente nunca se entera y se queda viendo un
-  // seguimiento que ya no va a avanzar.
+  // Mantiene el estado del trabajo (en camino, en sitio, completado) al día
+  // mientras el cliente mira esta pantalla — sin esto, jobStatus solo se
+  // fijaba una vez al llegar acá y nunca se enteraba de los avances reales
+  // del profesional. También detecta si el PROFESIONAL cancela (vuelve a
+  // "pending"), caso en el que el cliente tampoco se enteraría solo.
   useEffect(() => {
     if (config.MOCK_MODE || !request.id) return;
     const unsubscribe = subscribeToJobChanges(request.id, row => {
-      if (row.status === "pending" && !ownCancelRef.current) onCancelledByProfessional();
+      if (row.status === "pending" && !ownCancelRef.current) { onCancelledByProfessional(); return; }
+      onRequestUpdate({ status: row.status, agreedPrice: row.agreedPrice });
     });
     return unsubscribe;
   }, [request.id]);
