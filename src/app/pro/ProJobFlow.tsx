@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from "react";
 import { config } from "@/lib/config";
 import { distanceKm as haversineKm } from "@/lib/geo";
-import { acceptServiceRequest, rejectServiceRequest, cancelActiveJob } from "@/lib/api";
-import type { ProReasonCode } from "@/lib/api";
+import { acceptServiceRequest, rejectServiceRequest, cancelActiveJob, getQuickReplies, createQuickReply, deleteQuickReply } from "@/lib/api";
+import type { ProReasonCode, QuickReply } from "@/lib/api";
 import type { GeoPoint } from "@/lib/types";
 import {
-  MapPin, AlertCircle, Loader2, CheckCircle, Car, Check, Upload, Award, Send, Zap, Star, X,
+  MapPin, AlertCircle, Loader2, CheckCircle, Car, Check, Upload, Award, Send, Zap, Star, X, Plus,
 } from "lucide-react";
 import { NAVY, LIME, AppHeader, ScreenWrap, Card, StatusBadge, LimeBtn, DangerBtn, ReasonPickerSheet } from "../ui/primitives";
 import { LiveMap } from "../maps/RealMap";
@@ -111,8 +111,8 @@ export function ProRequestDetail({ request, proLocation, onAccepted, onRejected,
 }
 
 // ─── PRO ACTIVE JOB ───────────────────────────────────────────────────────────
-export function ProActiveJob({ request, jobStatus, messages, onStatusChange, onSendMessage, onFinish, onCancelled, onBack }: {
-  request: ServiceRequest; jobStatus: JobStatus; messages: Message[];
+export function ProActiveJob({ request, jobStatus, messages, professionalId, onStatusChange, onSendMessage, onFinish, onCancelled, onBack }: {
+  request: ServiceRequest; jobStatus: JobStatus; messages: Message[]; professionalId?: string;
   onStatusChange: (s: JobStatus) => void; onSendMessage: (text: string) => void;
   onFinish: (photoFiles: File[]) => Promise<void>; onCancelled: () => void; onBack: () => void;
 }) {
@@ -125,6 +125,26 @@ export function ProActiveJob({ request, jobStatus, messages, onStatusChange, onS
     setPhotoPreviews(urls);
     return () => { urls.forEach(u => URL.revokeObjectURL(u)); };
   }, [photoFiles]);
+  const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
+  const [addingReply, setAddingReply] = useState(false);
+  const [newReplyText, setNewReplyText] = useState("");
+  useEffect(() => {
+    if (config.MOCK_MODE || !professionalId) return;
+    getQuickReplies(professionalId).then(setQuickReplies).catch(() => {});
+  }, [professionalId]);
+  const handleSaveQuickReply = async () => {
+    const text = newReplyText.trim();
+    if (!text || !professionalId) return;
+    setNewReplyText(""); setAddingReply(false);
+    try {
+      const created = await createQuickReply(professionalId, text);
+      setQuickReplies(prev => [...prev, created]);
+    } catch { /* no bloquea el chat si falla el guardado */ }
+  };
+  const handleDeleteQuickReply = async (id: string) => {
+    setQuickReplies(prev => prev.filter(r => r.id !== id));
+    try { await deleteQuickReply(id); } catch { /* ya se quitó de la vista */ }
+  };
   const [finishing, setFinishing] = useState(false);
   const [finishError, setFinishError] = useState("");
   const [showCancel, setShowCancel] = useState(false);
@@ -256,9 +276,31 @@ export function ProActiveJob({ request, jobStatus, messages, onStatusChange, onS
                 </div>
               ))}
             </div>
-            <div className="p-4 border-t flex gap-3" style={{ borderColor: "#E5E7EB", background: "#fff" }}>
-              <input value={msg} onChange={e => setMsg(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && msg.trim()) { onSendMessage(msg.trim()); setMsg(""); } }} placeholder="Escribe un mensaje..." className="flex-1 px-4 py-2.5 rounded-xl border text-sm outline-none bg-white" style={{ borderColor: "#E5E7EB", color: NAVY }} />
-              <button onClick={() => { if (msg.trim()) { onSendMessage(msg.trim()); setMsg(""); } }} className="w-11 h-11 rounded-xl flex items-center justify-center hover:brightness-110" style={{ background: LIME }}><Send className="w-4 h-4" style={{ color: NAVY }} /></button>
+            <div className="border-t" style={{ borderColor: "#E5E7EB", background: "#fff" }}>
+              <div className="flex gap-2 overflow-x-auto px-4 pt-3 pb-1">
+                {quickReplies.map(r => (
+                  <div key={r.id} className="flex items-center gap-1.5 flex-shrink-0 pl-3 pr-2 py-1.5 rounded-full border text-xs" style={{ borderColor: "#E5E7EB", background: "#F8FAFC", color: NAVY }}>
+                    <button onClick={() => setMsg(r.text)} className="max-w-[160px] truncate">{r.text}</button>
+                    <button onClick={() => handleDeleteQuickReply(r.id)} className="text-slate-400 hover:text-red-500"><X className="w-3 h-3" /></button>
+                  </div>
+                ))}
+                {addingReply ? (
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <input autoFocus value={newReplyText} onChange={e => setNewReplyText(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") handleSaveQuickReply(); if (e.key === "Escape") { setAddingReply(false); setNewReplyText(""); } }}
+                      placeholder="Nueva respuesta guardada..." className="px-3 py-1.5 rounded-full border text-xs outline-none" style={{ borderColor: LIME, color: NAVY, width: 180 }} />
+                    <button onClick={handleSaveQuickReply} className="text-xs font-semibold flex-shrink-0" style={{ color: LIME }}>Guardar</button>
+                  </div>
+                ) : (
+                  <button onClick={() => setAddingReply(true)} className="flex items-center gap-1 flex-shrink-0 px-3 py-1.5 rounded-full border text-xs font-semibold" style={{ borderColor: LIME, color: LIME }}>
+                    <Plus className="w-3 h-3" />Respuesta rápida
+                  </button>
+                )}
+              </div>
+              <div className="p-4 pt-2 flex gap-3">
+                <input value={msg} onChange={e => setMsg(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && msg.trim()) { onSendMessage(msg.trim()); setMsg(""); } }} placeholder="Escribe un mensaje..." className="flex-1 px-4 py-2.5 rounded-xl border text-sm outline-none bg-white" style={{ borderColor: "#E5E7EB", color: NAVY }} />
+                <button onClick={() => { if (msg.trim()) { onSendMessage(msg.trim()); setMsg(""); } }} className="w-11 h-11 rounded-xl flex items-center justify-center hover:brightness-110" style={{ background: LIME }}><Send className="w-4 h-4" style={{ color: NAVY }} /></button>
+              </div>
             </div>
           </div>
         )}

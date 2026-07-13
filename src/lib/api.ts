@@ -507,6 +507,30 @@ export async function sendMessage(requestId: string, text: string): Promise<Chat
   return { id: data.id, requestId: data.request_id, from: data.sender_role, senderId: data.sender_id, text: data.text, sentAt: data.sent_at };
 }
 
+// ─── Respuestas rápidas del profesional (tipo WhatsApp) ──────────────────────
+
+export interface QuickReply { id: string; text: string }
+
+export async function getQuickReplies(professionalId: string): Promise<QuickReply[]> {
+  if (config.MOCK_MODE) return [];
+  const { data, error } = await supabase.from("quick_replies").select("id, text").eq("professional_id", professionalId).order("created_at", { ascending: true });
+  if (error) throw { code: "db_error", message: error.message };
+  return data ?? [];
+}
+
+export async function createQuickReply(professionalId: string, text: string): Promise<QuickReply> {
+  if (config.MOCK_MODE) return { id: `qr-${Date.now()}`, text };
+  const { data, error } = await supabase.from("quick_replies").insert({ professional_id: professionalId, text }).select("id, text").single();
+  if (error) throw { code: "db_error", message: error.message };
+  return data;
+}
+
+export async function deleteQuickReply(id: string): Promise<void> {
+  if (config.MOCK_MODE) return;
+  const { error } = await supabase.from("quick_replies").delete().eq("id", id);
+  if (error) throw { code: "db_error", message: error.message };
+}
+
 // ─── Calificaciones (estrellas 1-5 + comentario) ─────────────────────────────
 
 export async function submitReview(data: {
