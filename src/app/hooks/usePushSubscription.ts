@@ -45,6 +45,17 @@ async function subscribeNativePush() {
   try {
     const perm = await PushNotifications.requestPermissions();
     if (perm.receive !== "granted") return;
+    // Canal de importancia alta: sin esto, Android/MIUI solo muestra un
+    // ícono chico en la barra de estado en vez del banner destacado
+    // ("heads-up") al recibir la notificación con la app en segundo plano.
+    if (Capacitor.getPlatform() === "android") {
+      await PushNotifications.createChannel({
+        id: "default_high",
+        name: "Notificaciones de MAGIVER",
+        importance: 4,
+        visibility: 1,
+      });
+    }
     await PushNotifications.register();
     PushNotifications.addListener("registration", async (token) => {
       await saveFcmToken(token.value, Capacitor.getPlatform() === "ios" ? "ios" : "android");

@@ -250,14 +250,29 @@ export function ClientSearching({ requestId, onMatched, onCancel }: {
       return () => clearTimeout(t);
     }
     let active = true;
-    getJobById(requestId).then(r => { if (active && r.searchRadiusKm != null) setRadiusKm(r.searchRadiusKm); }).catch(() => {});
+    const checkCurrentStatus = () => {
+      getJobById(requestId).then(r => {
+        if (!active) return;
+        if (r.searchRadiusKm != null) setRadiusKm(r.searchRadiusKm);
+        if (r.professionalId) {
+          getProfessionalById(r.professionalId).then(u => onMatched(proUserToProfessional(u, 0))).catch(() => {});
+        }
+      }).catch(() => {});
+    };
+    checkCurrentStatus();
     const unsubscribe = subscribeToJobChanges(requestId, row => {
       if (row.searchRadiusKm != null) setRadiusKm(row.searchRadiusKm);
       if (row.professionalId) {
         getProfessionalById(row.professionalId).then(u => onMatched(proUserToProfessional(u, 0))).catch(() => {});
       }
     });
-    return () => { active = false; unsubscribe(); };
+    // La conexión Realtime se pausa mientras la app está en segundo plano
+    // (o la pestaña oculta) — sin este chequeo, un profesional que acepta
+    // justo en ese momento se pierde y la pantalla queda "buscando" para
+    // siempre hasta que el cliente cancele y vuelva a pedir.
+    const onVisible = () => { if (document.visibilityState === "visible") checkCurrentStatus(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { active = false; unsubscribe(); document.removeEventListener("visibilitychange", onVisible); };
   }, [requestId]);
 
   const handleCancel = async () => {
