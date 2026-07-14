@@ -5,7 +5,7 @@ import { acceptServiceRequest, rejectServiceRequest, cancelActiveJob, getQuickRe
 import type { ProReasonCode, QuickReply } from "@/lib/api";
 import type { GeoPoint } from "@/lib/types";
 import {
-  MapPin, AlertCircle, Loader2, CheckCircle, Car, Check, Upload, Award, Send, Zap, Star, X, Plus, ThumbsUp, User,
+  MapPin, AlertCircle, Loader2, CheckCircle, Car, Check, Upload, Award, Send, Zap, Star, X, Plus, ThumbsUp, User, Camera,
 } from "lucide-react";
 import { NAVY, LIME, AppHeader, ScreenWrap, Card, StatusBadge, LimeBtn, DangerBtn, ReasonPickerSheet } from "../ui/primitives";
 import { LiveMap } from "../maps/RealMap";
@@ -266,17 +266,26 @@ export function ProActiveJob({ request, jobStatus, messages, professionalId, pro
                     </div>
                   )}
                   {photoFiles.length < 3 && (
-                    <label className="flex items-center gap-3 px-4 py-3.5 rounded-xl border-2 border-dashed cursor-pointer transition-colors border-slate-200 hover:border-slate-300 bg-white">
-                      <Upload className="w-5 h-5 text-slate-400 flex-shrink-0" />
-                      <span className="text-sm text-slate-400">
-                        {photoFiles.length === 0 ? "Toca para subir 1 a 3 fotos" : `Agregar otra foto (${photoFiles.length}/3)`}
-                      </span>
-                      <input type="file" accept="image/*" multiple className="hidden" onChange={e => {
-                        const picked = Array.from(e.target.files ?? []);
-                        if (picked.length > 0) setPhotoFiles(prev => [...prev, ...picked].slice(0, 3));
-                        e.target.value = "";
-                      }} />
-                    </label>
+                    <div className="flex gap-2">
+                      <label className="flex-1 flex items-center justify-center gap-2 px-3 py-3.5 rounded-xl border-2 border-dashed cursor-pointer transition-colors border-slate-200 hover:border-slate-300 bg-white">
+                        <Camera className="w-5 h-5 text-slate-400 flex-shrink-0" />
+                        <span className="text-sm text-slate-400">Tomar foto</span>
+                        <input type="file" accept="image/*" capture="environment" className="hidden" onChange={e => {
+                          const picked = Array.from(e.target.files ?? []);
+                          if (picked.length > 0) setPhotoFiles(prev => [...prev, ...picked].slice(0, 3));
+                          e.target.value = "";
+                        }} />
+                      </label>
+                      <label className="flex-1 flex items-center justify-center gap-2 px-3 py-3.5 rounded-xl border-2 border-dashed cursor-pointer transition-colors border-slate-200 hover:border-slate-300 bg-white">
+                        <Upload className="w-5 h-5 text-slate-400 flex-shrink-0" />
+                        <span className="text-sm text-slate-400">Galería</span>
+                        <input type="file" accept="image/*" multiple className="hidden" onChange={e => {
+                          const picked = Array.from(e.target.files ?? []);
+                          if (picked.length > 0) setPhotoFiles(prev => [...prev, ...picked].slice(0, 3));
+                          e.target.value = "";
+                        }} />
+                      </label>
+                    </div>
                   )}
                 </div>
                 <div>
