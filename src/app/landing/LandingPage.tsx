@@ -20,6 +20,7 @@ import catProfIngles from "@/assets/photos/cat-profesor-ingles.jpg";
 import catChoferDesignado from "@/assets/photos/cat-chofer-designado.jpg";
 import catPaseadorMascotas from "@/assets/photos/cat-paseador-mascotas.jpg";
 import catCerrajero from "@/assets/photos/cat-cerrajero.jpg";
+import catTecnicoLavadoras from "@/assets/photos/cat-tecnico-lavadoras.jpg";
 import {
   MapPin, Shield, Star, ChevronDown, Menu, X,
   Zap, Droplets, Wind, Wrench, Paintbrush, MoreHorizontal,
@@ -28,7 +29,7 @@ import {
   ArrowRight, Briefcase, Car,
   DollarSign,
   Bike, Sparkles, Flame, Leaf, Bug, Calculator, FlaskConical, Atom, Languages,
-  CarFront, PawPrint, KeyRound,
+  CarFront, PawPrint, KeyRound, WashingMachine,
 } from "lucide-react";
 import { NAVY, LIME, LIGHT, LogoIcon, LimeBtn, DevStatus } from "../ui/primitives";
 import { LegalModal, type LegalTab } from "../legal/LegalModal";
@@ -205,6 +206,7 @@ function LandingServices({ onClient }: { onClient: () => void }) {
     { icon: CarFront, title: "Chofer designado", desc: "Chofer para cuando no puedes conducir tu propio vehículo.", photo: catChoferDesignado },
     { icon: PawPrint, title: "Paseador de mascotas", desc: "Paseos diarios para perros y gatos.", photo: catPaseadorMascotas },
     { icon: KeyRound, title: "Cerrajero", desc: "Apertura de puertas, cambio de cerraduras y copias de llaves.", photo: catCerrajero },
+    { icon: WashingMachine, title: "Técnico de lavadoras", desc: "Reparación y mantenimiento de lavadoras.", photo: catTecnicoLavadoras },
     { icon: MoreHorizontal, title: "Otros servicios", desc: "Carpintería y más.", photo: undefined },
   ];
   return (
