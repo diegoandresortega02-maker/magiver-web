@@ -23,7 +23,7 @@ import catCerrajero from "@/assets/photos/cat-cerrajero.jpg";
 import catTecnicoLavadoras from "@/assets/photos/cat-tecnico-lavadoras.jpg";
 import {
   MapPin, Shield, Star, ChevronDown, Menu, X,
-  Zap, Droplets, Wind, Wrench, Paintbrush, MoreHorizontal,
+  Zap, Droplets, Wind, Wrench, Paintbrush,
   MessageSquare, Navigation, Clock, Phone, Mail, FileCheck,
   BadgeCheck, AlertTriangle, BarChart3, Smartphone,
   ArrowRight, Briefcase, Car,
@@ -207,7 +207,6 @@ function LandingServices({ onClient }: { onClient: () => void }) {
     { icon: PawPrint, title: "Paseador de mascotas", desc: "Paseos diarios para perros y gatos.", photo: catPaseadorMascotas },
     { icon: KeyRound, title: "Cerrajero", desc: "Apertura de puertas, cambio de cerraduras y copias de llaves.", photo: catCerrajero },
     { icon: WashingMachine, title: "Técnico de lavadoras", desc: "Reparación y mantenimiento de lavadoras.", photo: catTecnicoLavadoras },
-    { icon: MoreHorizontal, title: "Otros servicios", desc: "Carpintería y más.", photo: undefined },
   ];
   return (
     <section id="servicios" className="py-24" style={{ background: LIGHT }}>
