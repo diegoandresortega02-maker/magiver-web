@@ -66,7 +66,7 @@ export function proUserToProfessional(u: ApiProUser, index: number, clientLocati
     eta = Math.max(5, Math.round((distance / 25) * 60)); // ~25 km/h en ciudad
   }
   return {
-    id: u.id, name: u.name, specialty: specialtyLabel(u.specialty), rating: u.rating,
+    id: u.id, name: u.name, specialty: u.specialties.map(specialtyLabel).join(", "), rating: u.rating,
     reviews: u.reviewCount, distance, eta, location: u.location,
     initials: u.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase(),
     color: PRO_COLORS[index % PRO_COLORS.length], verified: true, jobs: u.completedJobs, bio: u.bio,

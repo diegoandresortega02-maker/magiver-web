@@ -57,7 +57,7 @@ async function fetchProfileForUser(
   if (pro) {
     return {
       role: "professional", id: pro.id, name: pro.name, phone: pro.phone, email,
-      specialty: pro.specialty, ci: pro.ci, yearsExp: pro.years_exp, bio: pro.bio ?? "",
+      specialties: pro.specialties ?? [], ci: pro.ci, yearsExp: pro.years_exp, bio: pro.bio ?? "",
       status: pro.status, rating: Number(pro.rating), reviewCount: pro.review_count,
       completedJobs: pro.completed_jobs, isOnline: pro.is_online,
       location: pro.location_lat != null ? { lat: pro.location_lat, lng: pro.location_lng } : undefined,

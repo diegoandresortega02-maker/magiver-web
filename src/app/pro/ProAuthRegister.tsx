@@ -3,7 +3,7 @@ import { config } from "@/lib/config";
 import { loginPro } from "@/lib/auth";
 import { registerProfessional as apiRegisterProfessional, uploadDocument as apiUploadDocument } from "@/lib/api";
 import {
-  UserCheck, Mail, AlertCircle, Loader2, User, Phone, MapPin, ChevronDown,
+  UserCheck, Mail, AlertCircle, Loader2, User, Phone, MapPin,
   Award, FileCheck, Camera, Check, ArrowRight, Image, Upload, Trash2, FilePlus, Send,
   CheckCircle, Clock, Settings,
 } from "lucide-react";
@@ -23,7 +23,7 @@ export function ProAuth({ onLogin, onRegister, onBack }: { onLogin: (u: ProUser)
     try {
       if (config.MOCK_MODE) {
         await new Promise(r => setTimeout(r, 1000));
-        onLogin({ name: "Carlos Rojas", phone: "+591 78901234", email: "carlos@email.com", specialty: "Electricista", ci: "5678901 SC", yearsExp: 8, bio: "Técnico eléctrico certificado con 8 años de experiencia.", status: "active" } as ProUser);
+        onLogin({ name: "Carlos Rojas", phone: "+591 78901234", email: "carlos@email.com", specialties: ["electricista"], ci: "5678901 SC", yearsExp: 8, bio: "Técnico eléctrico certificado con 8 años de experiencia.", status: "active" } as ProUser);
         return;
       }
       const session = await loginPro(email, pass);
@@ -67,7 +67,8 @@ export function ProAuth({ onLogin, onRegister, onBack }: { onLogin: (u: ProUser)
 // ─── PRO REGISTER ─────────────────────────────────────────────────────────────
 export function ProRegister({ onSubmit, onBack }: { onSubmit: (u: ProUser) => void; onBack: () => void }) {
   const [name, setName] = useState(""); const [phone, setPhone] = useState(""); const [email, setEmail] = useState("");
-  const [pass, setPass] = useState(""); const [specialty, setSpecialty] = useState("");
+  const [pass, setPass] = useState(""); const [specialties, setSpecialties] = useState<string[]>([]);
+  const toggleSpecialty = (id: string) => setSpecialties(prev => prev.includes(id) ? prev.filter(s => s !== id) : prev.length < 4 ? [...prev, id] : prev);
   const [ci, setCi] = useState(""); const [yearsExp, setYearsExp] = useState(""); const [bio, setBio] = useState("");
   const [homeStreet, setHomeStreet] = useState(""); const [homeZone, setHomeZone] = useState("");
   const [loading, setLoading] = useState(false);
@@ -80,7 +81,7 @@ export function ProRegister({ onSubmit, onBack }: { onSubmit: (u: ProUser) => vo
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !phone || !specialty || !ci || !homeStreet) return;
+    if (!name || !phone || specialties.length === 0 || !ci || !homeStreet) return;
     let hasError = false;
     if (!termsAccepted) { setTermsError(true); hasError = true; }
     if (!declarationAccepted) { setDeclarationError(true); hasError = true; }
@@ -90,15 +91,15 @@ export function ProRegister({ onSubmit, onBack }: { onSubmit: (u: ProUser) => vo
     try {
       if (config.MOCK_MODE) {
         await new Promise(r => setTimeout(r, 1000));
-        onSubmit({ name, phone, email, specialty, ci, yearsExp: parseInt(yearsExp) || 1, bio, status: "pending" } as ProUser);
+        onSubmit({ name, phone, email, specialties, ci, yearsExp: parseInt(yearsExp) || 1, bio, status: "pending" } as ProUser);
         return;
       }
       const { id } = await apiRegisterProfessional({
         name, phone, email, password: pass,
-        specialty: specialty as any, ci, yearsExp: parseInt(yearsExp) || 1, bio,
+        specialties: specialties as any, ci, yearsExp: parseInt(yearsExp) || 1, bio,
         homeAddress: { street: homeStreet, zone: homeZone, city: "Santa Cruz de la Sierra" },
       });
-      onSubmit({ id, name, phone, email, specialty, ci, yearsExp: parseInt(yearsExp) || 1, bio, status: "pending" } as ProUser);
+      onSubmit({ id, name, phone, email, specialties, ci, yearsExp: parseInt(yearsExp) || 1, bio, status: "pending" } as ProUser);
     } catch (err: any) {
       setAuthError(err?.message || "No se pudo completar el registro. Intenta de nuevo.");
     } finally {
@@ -125,15 +126,26 @@ export function ProRegister({ onSubmit, onBack }: { onSubmit: (u: ProUser) => vo
           <p className="text-xs text-slate-500 -mt-3">Se pide solo una vez, al registrarte, para tu verificación de identidad.</p>
           <InputField label="Calle y número" placeholder="Ej. Calle Los Pinos #342" value={homeStreet} onChange={setHomeStreet} icon={<MapPin className="w-4 h-4" />} />
           <InputField label="Zona / Barrio" placeholder="Ej. Equipetrol" value={homeZone} onChange={setHomeZone} icon={<MapPin className="w-4 h-4" />} />
-          <p className="text-xs font-bold uppercase tracking-wider" style={{ color: LIME }}>Especialidad</p>
+          <p className="text-xs font-bold uppercase tracking-wider" style={{ color: LIME }}>Especialidades</p>
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: NAVY }}>Categoría principal</label>
-            <div className="relative">
-              <select value={specialty} onChange={e => setSpecialty(e.target.value)} className="w-full px-4 py-3 rounded-xl border text-sm outline-none appearance-none bg-white" style={{ borderColor: "#E5E7EB", color: specialty ? NAVY : "#94A3B8" }} required>
-                <option value="" disabled>Selecciona tu especialidad</option>
-                {SERVICES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: NAVY }}>
+              Elige hasta 4 {specialties.length > 0 && <span className="normal-case font-normal text-slate-400">({specialties.length}/4)</span>}
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {SERVICES.map(s => {
+                const checked = specialties.includes(s.id);
+                const disabled = !checked && specialties.length >= 4;
+                return (
+                  <button key={s.id} type="button" onClick={() => toggleSpecialty(s.id)} disabled={disabled}
+                    className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 text-left text-sm transition-colors ${disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
+                    style={{ borderColor: checked ? LIME : "#E5E7EB", background: checked ? "#F7FEE7" : "#fff", color: NAVY }}>
+                    <div className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0" style={{ background: checked ? LIME : "#fff", border: checked ? "none" : "2px solid #E5E7EB" }}>
+                      {checked && <Check className="w-3 h-3" style={{ color: NAVY }} />}
+                    </div>
+                    <span className="truncate">{s.label}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
           <InputField label="Años de experiencia" type="number" placeholder="Ej. 5" value={yearsExp} onChange={setYearsExp} icon={<Award className="w-4 h-4" />} />
@@ -180,7 +192,7 @@ export function ProRegister({ onSubmit, onBack }: { onSubmit: (u: ProUser) => vo
             </p>
           )}
 
-          <LimeBtn type="submit" disabled={loading || !name || !phone || !specialty || !ci || !homeStreet || !termsAccepted || !declarationAccepted} className="w-full py-4 text-base">
+          <LimeBtn type="submit" disabled={loading || !name || !phone || specialties.length === 0 || !ci || !homeStreet || !termsAccepted || !declarationAccepted} className="w-full py-4 text-base">
             {loading ? <><Loader2 className="w-4 h-4 animate-spin" />Guardando...</> : <>Continuar a documentos <ArrowRight className="w-4 h-4" /></>}
           </LimeBtn>
         </form>

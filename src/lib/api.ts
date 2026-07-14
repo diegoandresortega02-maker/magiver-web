@@ -24,7 +24,7 @@ export interface NearbyProFilter {
 function rowToProUser(row: any, email = ""): ProUser {
   return {
     role: "professional", id: row.id, name: row.name, phone: row.phone, email,
-    specialty: row.specialty, ci: row.ci, yearsExp: row.years_exp, bio: row.bio ?? "",
+    specialties: row.specialties ?? [], ci: row.ci, yearsExp: row.years_exp, bio: row.bio ?? "",
     status: row.status, rating: Number(row.rating), reviewCount: row.review_count,
     completedJobs: row.completed_jobs, isOnline: row.is_online,
     location: row.location_lat != null ? { lat: row.location_lat, lng: row.location_lng } : undefined,
@@ -53,7 +53,7 @@ export async function getNearbyProfessionals(filter: NearbyProFilter): Promise<P
   // Nota: filtro real por distancia (PostGIS) queda pendiente; por ahora trae
   // todos los activos de la categoría pedida y se puede ordenar en el cliente.
   let query = supabase.from("professionals").select("*").eq("status", "active");
-  if (filter.category) query = query.eq("specialty", filter.category);
+  if (filter.category) query = query.contains("specialties", [filter.category]);
   const { data, error } = await query;
   if (error) throw { code: "db_error", message: error.message };
   return (data ?? []).map(row => rowToProUser(row));
@@ -605,7 +605,7 @@ export async function submitClientRating(data: {
 
 export interface RegisterProPayload {
   name: string; phone: string; email: string; password: string;
-  specialty: ServiceCategory; ci: string; yearsExp: number; bio: string;
+  specialties: ServiceCategory[]; ci: string; yearsExp: number; bio: string;
   // Dirección de vivienda — solo se pide una vez, en el registro, para verificación.
   homeAddress: { street: string; zone: string; city: string };
 }
@@ -618,13 +618,32 @@ export async function registerProfessional(payload: RegisterProPayload): Promise
 
   // 2. Crear el perfil profesional, queda en estado "pending" hasta que el admin lo apruebe
   const { error } = await supabase.from("professionals").insert({
-    id: userId, name: payload.name, phone: payload.phone, specialty: payload.specialty,
+    id: userId, name: payload.name, phone: payload.phone, specialties: payload.specialties,
     ci: payload.ci, years_exp: payload.yearsExp, bio: payload.bio, status: "pending",
     home_address_street: payload.homeAddress.street, home_address_zone: payload.homeAddress.zone,
     home_address_city: payload.homeAddress.city,
   });
   if (error) throw { code: "db_error", message: error.message };
   return { id: userId };
+}
+
+// Guarda cambios reales del perfil del profesional (nombre, teléfono,
+// especialidades, años de experiencia, bio) — antes "Guardar cambios" en
+// ProProfile solo actualizaba el estado local de la pantalla, nunca tocaba
+// la base de datos.
+export async function updateProfessionalProfile(
+  id: string,
+  patch: { name?: string; phone?: string; specialties?: string[]; yearsExp?: number; bio?: string },
+): Promise<void> {
+  if (config.MOCK_MODE) { await delay(400); return; }
+  const dbPatch: Record<string, unknown> = {};
+  if (patch.name !== undefined) dbPatch.name = patch.name;
+  if (patch.phone !== undefined) dbPatch.phone = patch.phone;
+  if (patch.specialties !== undefined) dbPatch.specialties = patch.specialties;
+  if (patch.yearsExp !== undefined) dbPatch.years_exp = patch.yearsExp;
+  if (patch.bio !== undefined) dbPatch.bio = patch.bio;
+  const { error } = await supabase.from("professionals").update(dbPatch).eq("id", id);
+  if (error) throw { code: "db_error", message: error.message };
 }
 
 // ─── Subida de documentos (CI, selfie, certificados) ─────────────────────────
@@ -767,7 +786,7 @@ export async function rejectVerification(verificationId: string, reason: string)
 const MOCK_PROFESSIONALS: ProUser[] = [
   {
     id: "pro-001", role: "professional", name: "Carlos Rojas", email: "carlos@email.com",
-    phone: "+591 78901234", specialty: "electricista", ci: "5678901 SC",
+    phone: "+591 78901234", specialties: ["electricista"], ci: "5678901 SC",
     yearsExp: 8, bio: "Técnico eléctrico certificado.", status: "active",
     rating: 4.9, reviewCount: 47, completedJobs: 134, isOnline: true,
     createdAt: "2025-01-15T00:00:00Z",
@@ -775,7 +794,7 @@ const MOCK_PROFESSIONALS: ProUser[] = [
   },
   {
     id: "pro-002", role: "professional", name: "Ana Mendoza", email: "ana@email.com",
-    phone: "+591 76543210", specialty: "plomero", ci: "4321098 LP",
+    phone: "+591 76543210", specialties: ["plomero"], ci: "4321098 LP",
     yearsExp: 6, bio: "Especialista en instalaciones sanitarias.", status: "active",
     rating: 4.8, reviewCount: 32, completedJobs: 89, isOnline: true,
     createdAt: "2025-02-01T00:00:00Z",

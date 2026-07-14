@@ -118,7 +118,7 @@ export function AdminDashboard({ pendingList, loadingPending, activeList, loadin
                     </div>
                     <div className="flex-1">
                       <p className="font-bold text-sm" style={{ color: NAVY }}>{rec.professional.name}</p>
-                      <p className="text-xs text-slate-500">{specialtyLabel(rec.professional.specialty)} · {rec.professional.yearsExp} años exp.</p>
+                      <p className="text-xs text-slate-500">{rec.professional.specialties.map(specialtyLabel).join(", ")} · {rec.professional.yearsExp} años exp.</p>
                       <p className="text-xs text-slate-400">CI: {rec.professional.ci}</p>
                     </div>
                     <VerifBadge status="pending" />
@@ -146,7 +146,7 @@ export function AdminDashboard({ pendingList, loadingPending, activeList, loadin
                     <div className="w-11 h-11 rounded-full flex items-center justify-center font-bold text-sm text-white" style={{ background: "#3B82F6" }}>{pro.name.split(" ").map(n => n[0]).join("").slice(0, 2)}</div>
                     <div className="flex-1">
                       <div className="flex items-center gap-1.5"><p className="font-bold text-sm" style={{ color: NAVY }}>{pro.name}</p><BadgeCheck className="w-4 h-4 text-blue-500" /></div>
-                      <p className="text-xs text-slate-500">{specialtyLabel(pro.specialty)} · CI: {pro.ci}</p>
+                      <p className="text-xs text-slate-500">{pro.specialties.map(specialtyLabel).join(", ")} · CI: {pro.ci}</p>
                       <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">
                         <span>{pro.completedJobs} trabajos</span>
                         <span className="flex items-center gap-0.5"><Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />{pro.rating.toFixed(1)}</span>
@@ -172,7 +172,7 @@ export function AdminDashboard({ pendingList, loadingPending, activeList, loadin
                     <div className="w-11 h-11 rounded-full flex items-center justify-center font-bold text-sm text-white" style={{ background: "#EF4444" }}>{pro.name.split(" ").map(n => n[0]).join("").slice(0, 2)}</div>
                     <div className="flex-1">
                       <p className="font-bold text-sm" style={{ color: NAVY }}>{pro.name}</p>
-                      <p className="text-xs text-slate-500">{specialtyLabel(pro.specialty)} · CI: {pro.ci}</p>
+                      <p className="text-xs text-slate-500">{pro.specialties.map(specialtyLabel).join(", ")} · CI: {pro.ci}</p>
                       <p className="text-xs text-red-500 mt-0.5">{pro.rejectionReason || "Sin motivo registrado"}</p>
                     </div>
                     <VerifBadge status="rejected" />
@@ -263,7 +263,7 @@ export function AdminProReview({ record, onDone, onBack }: {
             <div className="w-14 h-14 rounded-full flex items-center justify-center font-bold text-xl text-white flex-shrink-0" style={{ background: "#8B5CF6" }}>
               {record.professional.name.split(" ").map(n => n[0]).join("").slice(0, 2)}
             </div>
-            <div className="flex-1"><h3 className="font-black text-lg" style={{ color: NAVY }}>{record.professional.name}</h3><p className="text-sm text-slate-500">{specialtyLabel(record.professional.specialty)}</p><VerifBadge status="pending" /></div>
+            <div className="flex-1"><h3 className="font-black text-lg" style={{ color: NAVY }}>{record.professional.name}</h3><p className="text-sm text-slate-500">{record.professional.specialties.map(specialtyLabel).join(", ")}</p><VerifBadge status="pending" /></div>
           </div>
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div><p className="text-xs text-slate-400">Teléfono</p><p className="font-semibold" style={{ color: NAVY }}>{record.professional.phone}</p></div>

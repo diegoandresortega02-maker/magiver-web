@@ -22,7 +22,7 @@ export interface ClientUser extends BaseUser {
 
 export interface ProUser extends BaseUser {
   role: "professional";
-  specialty: string;
+  specialties: string[];
   ci: string;
   yearsExp: number;
   bio: string;

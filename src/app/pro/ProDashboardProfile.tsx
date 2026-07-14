@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { config } from "@/lib/config";
-import { getProfessionalJobHistory } from "@/lib/api";
+import { getProfessionalJobHistory, updateProfessionalProfile } from "@/lib/api";
 import type { RecentJob, JobHistoryEntry } from "@/lib/api";
 import {
   Bell, User, LogOut, Star, BadgeCheck, ToggleRight, ToggleLeft,
-  CheckCircle, FileCheck, ChevronDown, Award, ChevronRight, Phone, Mail, Check, AlertCircle, X,
+  CheckCircle, FileCheck, Award, ChevronRight, Phone, Mail, Check, AlertCircle, X,
 } from "lucide-react";
 import { NAVY, LIME, AppHeader, ScreenWrap, InputField, LimeBtn, DangerBtn, Card, StatusBadge, VerifBadge, LogoIcon, JobHistoryCard } from "../ui/primitives";
 import { specialtyLabel, SERVICES } from "../lib.local/mappers";
@@ -41,7 +41,7 @@ export function ProDashboard({ user, jobStatus, activeRequest, availableOffers, 
             </div>
             <div className="flex-1">
               <p className="text-white font-bold">{user.name}</p>
-              <p className="text-slate-400 text-sm">{specialtyLabel(user.specialty)} · {user.yearsExp} años exp.</p>
+              <p className="text-slate-400 text-sm">{user.specialties.map(specialtyLabel).join(", ")} · {user.yearsExp} años exp.</p>
               <div className="flex items-center gap-1 mt-0.5">
                 <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
                 <span className="text-xs text-slate-300">{(user.rating ?? 0).toFixed(1)} · {user.reviewCount ?? 0} reseñas</span>
@@ -195,8 +195,27 @@ export function ProJobHistory({ user, onBack }: { user: ProUser; onBack: () => v
 // ─── PRO PROFILE ──────────────────────────────────────────────────────────────
 export function ProProfile({ user, onSave, onDocuments, onBack, onLogout }: { user: ProUser; onSave: (u: ProUser) => void; onDocuments: () => void; onBack: () => void; onLogout: () => void }) {
   const [name, setName] = useState(user.name); const [phone, setPhone] = useState(user.phone); const [email, setEmail] = useState(user.email);
-  const [specialty, setSpecialty] = useState(user.specialty); const [yearsExp, setYearsExp] = useState(String(user.yearsExp)); const [bio, setBio] = useState(user.bio);
+  const [specialties, setSpecialties] = useState<string[]>(user.specialties); const [yearsExp, setYearsExp] = useState(String(user.yearsExp)); const [bio, setBio] = useState(user.bio);
+  const toggleSpecialty = (id: string) => setSpecialties(prev => prev.includes(id) ? prev.filter(s => s !== id) : prev.length < 4 ? [...prev, id] : prev);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (specialties.length === 0) return;
+    setSaveError(""); setSaving(true);
+    try {
+      if (!config.MOCK_MODE && user.id) {
+        await updateProfessionalProfile(user.id, { name, phone, specialties, yearsExp: parseInt(yearsExp) || 1, bio });
+      }
+      onSave({ ...user, name, phone, email, specialties, yearsExp: parseInt(yearsExp) || 1, bio });
+      setSaved(true); setTimeout(() => setSaved(false), 2000);
+    } catch (err: any) {
+      setSaveError(err?.message || "No se pudieron guardar los cambios. Intenta de nuevo.");
+    } finally {
+      setSaving(false);
+    }
+  };
   return (
     <ScreenWrap>
       <AppHeader title="Mi perfil profesional" onBack={onBack} />
@@ -208,19 +227,31 @@ export function ProProfile({ user, onSave, onDocuments, onBack, onLogout }: { us
           <p className="font-bold text-lg" style={{ color: NAVY }}>{name}</p>
           <div className="mt-1"><VerifBadge status={user.status} /></div>
         </div>
-        <form onSubmit={e => { e.preventDefault(); onSave({ ...user, name, phone, email, specialty, yearsExp: parseInt(yearsExp) || 1, bio }); setSaved(true); setTimeout(() => setSaved(false), 2000); }} className="flex flex-col gap-5">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
           <p className="text-xs font-bold uppercase tracking-wider" style={{ color: LIME }}>Datos de contacto</p>
           <InputField label="Nombre completo" placeholder="Tu nombre" value={name} onChange={setName} icon={<User className="w-4 h-4" />} />
           <InputField label="Teléfono / WhatsApp" type="tel" placeholder="+591 7xxxxxxx" value={phone} onChange={setPhone} icon={<Phone className="w-4 h-4" />} />
           <InputField label="Correo electrónico" type="email" placeholder="tu@correo.com" value={email} onChange={setEmail} icon={<Mail className="w-4 h-4" />} />
           <p className="text-xs font-bold uppercase tracking-wider" style={{ color: LIME }}>Información profesional</p>
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: NAVY }}>Especialidad</label>
-            <div className="relative">
-              <select value={specialty} onChange={e => setSpecialty(e.target.value)} className="w-full px-4 py-3 rounded-xl border text-sm outline-none appearance-none bg-white" style={{ borderColor: "#E5E7EB", color: NAVY }}>
-                {SERVICES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: NAVY }}>
+              Especialidades {specialties.length > 0 && <span className="normal-case font-normal text-slate-400">({specialties.length}/4)</span>}
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {SERVICES.map(s => {
+                const checked = specialties.includes(s.id);
+                const disabled = !checked && specialties.length >= 4;
+                return (
+                  <button key={s.id} type="button" onClick={() => toggleSpecialty(s.id)} disabled={disabled}
+                    className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 text-left text-sm transition-colors ${disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
+                    style={{ borderColor: checked ? LIME : "#E5E7EB", background: checked ? "#F7FEE7" : "#fff", color: NAVY }}>
+                    <div className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0" style={{ background: checked ? LIME : "#fff", border: checked ? "none" : "2px solid #E5E7EB" }}>
+                      {checked && <Check className="w-3 h-3" style={{ color: NAVY }} />}
+                    </div>
+                    <span className="truncate">{s.label}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
           <InputField label="Años de experiencia" type="number" placeholder="Ej. 5" value={yearsExp} onChange={setYearsExp} icon={<Award className="w-4 h-4" />} />
@@ -240,8 +271,13 @@ export function ProProfile({ user, onSave, onDocuments, onBack, onLogout }: { us
             </div>
             <ChevronRight className="w-4 h-4 text-slate-400" />
           </button>
-          <LimeBtn type="submit" className="w-full py-3.5 text-base mt-1">
-            {saved ? <><Check className="w-4 h-4" />Guardado</> : "Guardar cambios"}
+          {saveError && (
+            <p className="text-xs font-medium flex items-center gap-1.5" style={{ color: "#EF4444" }}>
+              <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />{saveError}
+            </p>
+          )}
+          <LimeBtn type="submit" disabled={saving || specialties.length === 0} className="w-full py-3.5 text-base mt-1">
+            {saving ? <>Guardando...</> : saved ? <><Check className="w-4 h-4" />Guardado</> : "Guardar cambios"}
           </LimeBtn>
         </form>
         <DangerBtn onClick={onLogout} className="w-full mt-6"><LogOut className="w-4 h-4" />Cerrar sesión</DangerBtn>

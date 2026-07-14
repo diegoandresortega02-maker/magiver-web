@@ -94,21 +94,29 @@ export function ProfesionalPortal() {
   const [selectedOffer, setSelectedOffer] = useState<ServiceRequest | null>(null);
   const [rejectedIds, setRejectedIds] = useState<Set<string>>(new Set());
   useEffect(() => {
-    if (config.MOCK_MODE || !proUser?.id || !proUser.specialty || activeRequest) { setAvailableOffers([]); return; }
+    if (config.MOCK_MODE || !proUser?.id || !proUser.specialties?.length || activeRequest) { setAvailableOffers([]); return; }
     let active = true;
-    const category = proUser.specialty as any;
+    const categories = proUser.specialties as any[];
     getRejectedRequestIds(proUser.id).then(ids => { if (active) setRejectedIds(new Set(ids)); }).catch(() => {});
-    getAvailableOffersForProfessional(category).then(reqs => { if (active) setAvailableOffers(reqs.map(r => apiRequestToLocal(r))); }).catch(() => {});
-    const unsubscribe = subscribeToAvailableOffers(category, row => {
+    // Un profesional puede tener varias especialidades — la consulta y el
+    // canal de Realtime solo aceptan una categoría a la vez, así que se
+    // llaman una vez por especialidad y se mezclan los resultados.
+    Promise.all(categories.map(category => getAvailableOffersForProfessional(category)))
+      .then(results => {
+        if (!active) return;
+        const merged = new Map(results.flat().map(r => [r.id, apiRequestToLocal(r)]));
+        setAvailableOffers([...merged.values()]);
+      }).catch(() => {});
+    const unsubscribes = categories.map(category => subscribeToAvailableOffers(category, row => {
       const local = apiRequestToLocal(row);
       setAvailableOffers(prev => {
         const withoutThis = prev.filter(o => o.id !== local.id);
         if (row.status !== "pending" || row.professionalId) return withoutThis; // ya no está disponible
         return [...withoutThis, local];
       });
-    });
-    return () => { active = false; unsubscribe(); };
-  }, [proUser?.id, proUser?.specialty, !!activeRequest]);
+    }));
+    return () => { active = false; unsubscribes.forEach(u => u()); };
+  }, [proUser?.id, proUser?.specialties?.join(","), !!activeRequest]);
 
   // Trabajos reales ya completados (antes era una lista de ejemplo inventada).
   const [recentJobs, setRecentJobs] = useState<RecentJob[]>([]);

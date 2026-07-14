@@ -6,7 +6,7 @@ export interface ClientUser { id?: string; name: string; phone: string; email: s
 export interface ProUser {
   id?: string;
   name: string; phone: string; email: string;
-  specialty: string; ci: string;
+  specialties: string[]; ci: string;
   yearsExp: number; bio: string;
   rating?: number; reviewCount?: number; completedJobs?: number;
   status: "pending" | "active" | "rejected";
