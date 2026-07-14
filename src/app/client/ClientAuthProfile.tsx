@@ -133,6 +133,7 @@ export function ClientProfile({ user, onSave, onBack, onLogout, onViewHistory }:
           </button>
         </Card>
         <DangerBtn onClick={onLogout} className="w-full mt-6"><LogOut className="w-4 h-4" />Cerrar sesión</DangerBtn>
+        <p className="text-center text-xs text-slate-300 mt-4">MAGIVER v{config.APP_VERSION}</p>
       </div>
     </ScreenWrap>
   );

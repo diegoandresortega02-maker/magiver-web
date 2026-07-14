@@ -3,6 +3,13 @@
 // En producción crear un archivo .env con las variables VITE_*
 
 export const config = {
+  // Versión de la app (semántica: mayor.menor.parche). 0.x.x mientras el
+  // proyecto no se haya lanzado públicamente; 1.0.0 queda reservado para el
+  // lanzamiento real en Play Store. Se sube a mano con cada tanda de cambios
+  // — mantenerla igual a "version" en package.json y a versionName en
+  // android/app/build.gradle.
+  APP_VERSION: "0.1.0",
+
   // API REST del backend MAGIVER
   // TODO: apuntar a la URL real cuando el backend esté desplegado
   API_BASE_URL: import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000/api/v1",
