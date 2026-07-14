@@ -17,6 +17,9 @@ import catProfMatematicas from "@/assets/photos/cat-profesor-matematicas.jpg";
 import catProfQuimica from "@/assets/photos/cat-profesor-quimica.jpg";
 import catProfFisica from "@/assets/photos/cat-profesor-fisica.jpg";
 import catProfIngles from "@/assets/photos/cat-profesor-ingles.jpg";
+import catChoferDesignado from "@/assets/photos/cat-chofer-designado.jpg";
+import catPaseadorMascotas from "@/assets/photos/cat-paseador-mascotas.jpg";
+import catCerrajero from "@/assets/photos/cat-cerrajero.jpg";
 import {
   MapPin, Shield, Star, ChevronDown, Menu, X,
   Zap, Droplets, Wind, Wrench, Paintbrush, MoreHorizontal,
@@ -25,6 +28,7 @@ import {
   ArrowRight, Briefcase, Car,
   DollarSign,
   Bike, Sparkles, Flame, Leaf, Bug, Calculator, FlaskConical, Atom, Languages,
+  CarFront, PawPrint, KeyRound,
 } from "lucide-react";
 import { NAVY, LIME, LIGHT, LogoIcon, LimeBtn, DevStatus } from "../ui/primitives";
 import { LegalModal, type LegalTab } from "../legal/LegalModal";
@@ -198,7 +202,10 @@ function LandingServices({ onClient }: { onClient: () => void }) {
     { icon: FlaskConical, title: "Profesor de Química", desc: "Clases particulares de química para todo nivel.", photo: catProfQuimica },
     { icon: Atom, title: "Profesor de Física", desc: "Clases particulares de física para todo nivel.", photo: catProfFisica },
     { icon: Languages, title: "Profesor de Inglés", desc: "Clases particulares de inglés para todo nivel.", photo: catProfIngles },
-    { icon: MoreHorizontal, title: "Otros servicios", desc: "Carpintería, cerrajería y más.", photo: undefined },
+    { icon: CarFront, title: "Chofer designado", desc: "Chofer para cuando no puedes conducir tu propio vehículo.", photo: catChoferDesignado },
+    { icon: PawPrint, title: "Paseador de mascotas", desc: "Paseos diarios para perros y gatos.", photo: catPaseadorMascotas },
+    { icon: KeyRound, title: "Cerrajero", desc: "Apertura de puertas, cambio de cerraduras y copias de llaves.", photo: catCerrajero },
+    { icon: MoreHorizontal, title: "Otros servicios", desc: "Carpintería y más.", photo: undefined },
   ];
   return (
     <section id="servicios" className="py-24" style={{ background: LIGHT }}>
