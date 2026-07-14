@@ -32,6 +32,15 @@ export function ProRequestDetail({ request, proLocation, onAccepted, onRejected,
       if (!config.MOCK_MODE) await acceptServiceRequest(request.id!);
       onAccepted();
     } catch (err: any) {
+      if (err?.code === "request_already_taken") {
+        // Oferta obsoleta (otro profesional ya la aceptó, o el cliente
+        // canceló la búsqueda) — no es una decisión del profesional, así
+        // que NO se registra como un rechazo suyo (rejectServiceRequest no
+        // se llama). Solo se vuelve al panel principal.
+        setAcceptError("Esta solicitud ya no está disponible. Volviendo al inicio...");
+        setTimeout(onRejected, 1800);
+        return;
+      }
       setAcceptError(err?.message || "No se pudo aceptar la solicitud. Intenta de nuevo.");
       setLoading(false);
     }
