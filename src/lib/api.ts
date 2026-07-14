@@ -447,15 +447,20 @@ export function subscribeToJobChanges(requestId: string, onChange: (row: Service
 // notify_request_accepted_trigger. Esto solo guarda/borra la suscripción del
 // navegador para que ese envío tenga a quién mandarle el push.
 
+// Usa la RPC claim_push_subscription (SECURITY DEFINER) en vez de un upsert
+// directo: el mismo dispositivo puede haber guardado este endpoint/token
+// bajo OTRA cuenta antes (ej. se probó como cliente y luego como
+// profesional en el mismo teléfono) — un upsert directo queda bloqueado en
+// silencio por la política RLS de UPDATE, que exige que la fila ya
+// pertenezca a auth.uid(). La RPC reasigna el token al usuario actual.
 export async function savePushSubscription(sub: PushSubscriptionJSON): Promise<void> {
   if (config.MOCK_MODE || !sub.endpoint || !sub.keys) return;
-  const { data: userData } = await supabase.auth.getUser();
-  const userId = userData.user?.id;
-  if (!userId) return;
-  const { error } = await supabase.from("push_subscriptions").upsert(
-    { user_id: userId, endpoint: sub.endpoint, p256dh: sub.keys.p256dh, auth_key: sub.keys.auth },
-    { onConflict: "endpoint" },
-  );
+  const { error } = await supabase.rpc("claim_push_subscription", {
+    p_platform: "web",
+    p_endpoint: sub.endpoint,
+    p_p256dh: sub.keys.p256dh,
+    p_auth_key: sub.keys.auth,
+  });
   if (error) throw { code: "db_error", message: error.message };
 }
 
@@ -470,13 +475,10 @@ export async function deletePushSubscription(endpoint: string): Promise<void> {
 // en vez de una suscripción Web Push — misma tabla, columna `platform`.
 export async function saveFcmToken(token: string, platform: "android" | "ios"): Promise<void> {
   if (config.MOCK_MODE || !token) return;
-  const { data: userData } = await supabase.auth.getUser();
-  const userId = userData.user?.id;
-  if (!userId) return;
-  const { error } = await supabase.from("push_subscriptions").upsert(
-    { user_id: userId, platform, fcm_token: token },
-    { onConflict: "fcm_token" },
-  );
+  const { error } = await supabase.rpc("claim_push_subscription", {
+    p_platform: platform,
+    p_fcm_token: token,
+  });
   if (error) throw { code: "db_error", message: error.message };
 }
 
