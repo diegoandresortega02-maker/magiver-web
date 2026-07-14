@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import isotipo from "@/imports/isotipo_azul_verde_para_redes_-_verde_oficial.png";
 import { config } from "@/lib/config";
 import {
-  ChevronLeft, Eye, EyeOff, Clock, BadgeCheck, XCircle, Loader2, AlertCircle, Star,
+  ChevronLeft, Eye, EyeOff, Clock, BadgeCheck, XCircle, Loader2, AlertCircle, Star, Bell, X,
 } from "lucide-react";
 import type { JobStatus, Professional } from "../types.local";
 
@@ -225,6 +225,39 @@ export function Card({ children, className = "", onClick }: {
       className={`bg-white rounded-2xl border p-5 transition-all duration-150 ${onClick ? "cursor-pointer hover:shadow-md hover:-translate-y-0.5" : ""} ${className}`}
       style={{ borderColor: "#E5E7EB" }}>
       {children}
+    </div>
+  );
+}
+
+// Aviso flotante de solicitud nueva, visible sin importar qué pantalla del
+// portal del profesional esté activa (ProfesionalPortal lo renderiza fuera
+// del `content` de la pantalla). Se cierra solo a los ~6s.
+export function IncomingOfferAlert({ categoryLabel, address, onView, onDismiss }: {
+  categoryLabel: string; address?: string; onView: () => void; onDismiss: () => void;
+}) {
+  useEffect(() => {
+    const t = setTimeout(onDismiss, 6000);
+    return () => clearTimeout(t);
+  }, [onDismiss]);
+  return (
+    <div className="fixed top-4 left-4 right-4 z-[9999] flex justify-center pointer-events-none">
+      <div className="w-full max-w-sm rounded-2xl shadow-2xl border overflow-hidden pointer-events-auto" style={{ background: NAVY, borderColor: "rgba(132,204,22,0.4)" }}>
+        <div className="px-4 py-3 flex items-start gap-3">
+          <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: LIME }}>
+            <Bell className="w-4 h-4" style={{ color: NAVY }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-white">Nueva solicitud: {categoryLabel}</p>
+            {address && <p className="text-xs text-slate-300 truncate">{address}</p>}
+          </div>
+          <button onClick={onDismiss} className="text-slate-400 hover:text-white flex-shrink-0">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <button onClick={onView} className="w-full py-2.5 text-sm font-bold" style={{ background: LIME, color: NAVY }}>
+          Ver solicitud
+        </button>
+      </div>
     </div>
   );
 }

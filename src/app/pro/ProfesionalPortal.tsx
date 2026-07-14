@@ -3,7 +3,7 @@ import { useNavigate } from "react-router";
 import { config } from "@/lib/config";
 import { loadSession, logout } from "@/lib/auth";
 import { distanceKm as haversineKm } from "@/lib/geo";
-import { SessionLoading } from "../ui/primitives";
+import { SessionLoading, IncomingOfferAlert } from "../ui/primitives";
 import {
   getActiveRequestForProfessional, subscribeToRequestChanges, updateMyPresence,
   updateJobStatus, getAvailableOffersForProfessional, subscribeToAvailableOffers, getRejectedRequestIds,
@@ -82,6 +82,13 @@ export function ProfesionalPortal() {
     if (config.MOCK_MODE || !proUser?.id) return;
     updateMyPresence({ isOnline: available, location: proPosition ?? undefined }).catch(() => {});
   }, [available, proPosition, proUser?.id]);
+  // "available" arranca en true por defecto (ver arriba), así que un
+  // profesional que abre la app sin tocar el interruptor nunca disparaba el
+  // registro de push (antes solo pasaba dentro de handleToggleAvailable).
+  useEffect(() => {
+    if (config.MOCK_MODE || !proUser?.id || !available) return;
+    subscribeToPushNotifications();
+  }, [available, proUser?.id]);
   const handleToggleAvailable = () => {
     const goingOnline = !available;
     setAvailable(goingOnline);
@@ -93,6 +100,7 @@ export function ProfesionalPortal() {
   const [availableOffers, setAvailableOffers] = useState<ServiceRequest[]>([]);
   const [selectedOffer, setSelectedOffer] = useState<ServiceRequest | null>(null);
   const [rejectedIds, setRejectedIds] = useState<Set<string>>(new Set());
+  const [newOfferAlert, setNewOfferAlert] = useState<ServiceRequest | null>(null);
   useEffect(() => {
     if (config.MOCK_MODE || !proUser?.id || !proUser.specialties?.length || activeRequest) { setAvailableOffers([]); return; }
     let active = true;
@@ -101,21 +109,31 @@ export function ProfesionalPortal() {
     // Un profesional puede tener varias especialidades — la consulta y el
     // canal de Realtime solo aceptan una categoría a la vez, así que se
     // llaman una vez por especialidad y se mezclan los resultados.
-    Promise.all(categories.map(category => getAvailableOffersForProfessional(category)))
-      .then(results => {
-        if (!active) return;
-        const merged = new Map(results.flat().map(r => [r.id, apiRequestToLocal(r)]));
-        setAvailableOffers([...merged.values()]);
-      }).catch(() => {});
-    const unsubscribes = categories.map(category => subscribeToAvailableOffers(category, row => {
+    const refresh = () => {
+      Promise.all(categories.map(category => getAvailableOffersForProfessional(category)))
+        .then(results => {
+          if (!active) return;
+          const merged = new Map(results.flat().map(r => [r.id, apiRequestToLocal(r)]));
+          setAvailableOffers([...merged.values()]);
+        }).catch(() => {});
+    };
+    refresh();
+    const unsubscribes = categories.map(category => subscribeToAvailableOffers(category, (row, eventType) => {
       const local = apiRequestToLocal(row);
       setAvailableOffers(prev => {
         const withoutThis = prev.filter(o => o.id !== local.id);
         if (row.status !== "pending" || row.professionalId) return withoutThis; // ya no está disponible
+        if (eventType === "INSERT") setNewOfferAlert(local);
         return [...withoutThis, local];
       });
     }));
-    return () => { active = false; unsubscribes.forEach(u => u()); };
+    // Respaldo: la cancelación de una solicitud sin asignar (status pasa a
+    // 'cancelled') deja de cumplir la política RLS de broadcast para
+    // cualquier profesional, así que Realtime nunca entrega ese evento —
+    // se vuelve a consultar la lista completa cada 25s para que la oferta
+    // desaparezca sola aunque el evento nunca haya llegado.
+    const pollId = setInterval(refresh, 25000);
+    return () => { active = false; unsubscribes.forEach(u => u()); clearInterval(pollId); };
   }, [proUser?.id, proUser?.specialties?.join(","), !!activeRequest]);
 
   // Trabajos reales ya completados (antes era una lista de ejemplo inventada).
@@ -185,17 +203,30 @@ export function ProfesionalPortal() {
     }
   };
   if (checkingSession) return <SessionLoading />;
-  if (screen === "auth") return <ProAuth onLogin={u => { setProUser(u); setScreen("dashboard"); }} onRegister={() => setScreen("register")} onBack={() => navigate("/")} />;
-  if (screen === "register") return <ProRegister onSubmit={u => { setProUser(u); setScreen("documents"); }} onBack={() => setScreen("auth")} />;
-  if (screen === "documents") return <ProDocuments user={proUser!} onSubmit={handleDocSubmit} onBack={() => setScreen("register")} />;
-  if (screen === "docview") return <ProDocuments user={proUser!} onSubmit={() => {}} onBack={() => setScreen("profile")} viewOnly docs={proDocuments ?? undefined} />;
-  if (screen === "verify") return <ProVerify user={proUser!} onOpenAdmin={() => navigate("/admin")} />;
-  if (screen === "dashboard") return <ProDashboard user={proUser!} jobStatus={jobStatus} activeRequest={activeRequest} availableOffers={visibleOffers} recentJobs={recentJobs} available={available} notice={cancelNotice} onDismissNotice={() => setCancelNotice("")} onToggleAvailable={handleToggleAvailable} onViewRequest={() => setScreen("job")} onViewOffer={offer => { setSelectedOffer(offer); setScreen("request"); }} onProfile={() => setScreen("profile")} onDocuments={() => setScreen("docview")} onLogout={() => { logout(); resetMarketplace(); setProUser(null); navigate("/"); }} onViewHistory={() => setScreen("history")} />;
-  if (screen === "history") return <ProJobHistory user={proUser!} onBack={() => setScreen("dashboard")} />;
-  if (screen === "profile") return <ProProfile user={proUser!} onSave={u => { setProUser(u); setScreen("dashboard"); }} onDocuments={() => setScreen("docview")} onBack={() => setScreen("dashboard")} onLogout={() => { logout(); resetMarketplace(); setProUser(null); navigate("/"); }} />;
-  if (screen === "request") return <ProRequestDetail request={selectedOffer ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} proLocation={proPosition} onAccepted={handleOfferAccepted} onRejected={handleOfferRejected} onBack={() => { setSelectedOffer(null); setScreen("dashboard"); }} />;
-  if (screen === "job") return <ProActiveJob request={activeRequest ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} jobStatus={jobStatus} messages={chatMessages} professionalId={proUser?.id} proLocation={proPosition} onStatusChange={handleProStatus} onSendMessage={handleProMsg} onFinish={handleJobFinish} onCancelled={() => { resetMarketplace(); setScreen("dashboard"); }} onCancelledByClient={() => { setCancelNotice("El cliente canceló esta solicitud."); resetMarketplace(); setScreen("dashboard"); }} onBack={() => setScreen("dashboard")} />;
-  if (screen === "rateClient") return <ProRateClient clientName={activeRequest?.clientName} requestId={activeRequest?.id} onSubmit={() => setScreen("done")} />;
-  if (screen === "done") return <ProJobDone clientRating={clientRating} onHome={() => { resetMarketplace(); setScreen("dashboard"); }} />;
-  return null;
+  let content: React.ReactNode = null;
+  if (screen === "auth") content = <ProAuth onLogin={u => { setProUser(u); setScreen("dashboard"); }} onRegister={() => setScreen("register")} onBack={() => navigate("/")} />;
+  else if (screen === "register") content = <ProRegister onSubmit={u => { setProUser(u); setScreen("documents"); }} onBack={() => setScreen("auth")} />;
+  else if (screen === "documents") content = <ProDocuments user={proUser!} onSubmit={handleDocSubmit} onBack={() => setScreen("register")} />;
+  else if (screen === "docview") content = <ProDocuments user={proUser!} onSubmit={() => {}} onBack={() => setScreen("profile")} viewOnly docs={proDocuments ?? undefined} />;
+  else if (screen === "verify") content = <ProVerify user={proUser!} onOpenAdmin={() => navigate("/admin")} />;
+  else if (screen === "dashboard") content = <ProDashboard user={proUser!} jobStatus={jobStatus} activeRequest={activeRequest} availableOffers={visibleOffers} recentJobs={recentJobs} available={available} notice={cancelNotice} onDismissNotice={() => setCancelNotice("")} onToggleAvailable={handleToggleAvailable} onViewRequest={() => setScreen("job")} onViewOffer={offer => { setSelectedOffer(offer); setScreen("request"); }} onProfile={() => setScreen("profile")} onDocuments={() => setScreen("docview")} onLogout={() => { logout(); resetMarketplace(); setProUser(null); navigate("/"); }} onViewHistory={() => setScreen("history")} />;
+  else if (screen === "history") content = <ProJobHistory user={proUser!} onBack={() => setScreen("dashboard")} />;
+  else if (screen === "profile") content = <ProProfile user={proUser!} onSave={u => { setProUser(u); setScreen("dashboard"); }} onDocuments={() => setScreen("docview")} onBack={() => setScreen("dashboard")} onLogout={() => { logout(); resetMarketplace(); setProUser(null); navigate("/"); }} />;
+  else if (screen === "request") content = <ProRequestDetail request={selectedOffer ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} proLocation={proPosition} onAccepted={handleOfferAccepted} onRejected={handleOfferRejected} onBack={() => { setSelectedOffer(null); setScreen("dashboard"); }} />;
+  else if (screen === "job") content = <ProActiveJob request={activeRequest ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} jobStatus={jobStatus} messages={chatMessages} professionalId={proUser?.id} proLocation={proPosition} onStatusChange={handleProStatus} onSendMessage={handleProMsg} onFinish={handleJobFinish} onCancelled={() => { resetMarketplace(); setScreen("dashboard"); }} onCancelledByClient={() => { setCancelNotice("El cliente canceló esta solicitud."); resetMarketplace(); setScreen("dashboard"); }} onBack={() => setScreen("dashboard")} />;
+  else if (screen === "rateClient") content = <ProRateClient clientName={activeRequest?.clientName} requestId={activeRequest?.id} onSubmit={() => setScreen("done")} />;
+  else if (screen === "done") content = <ProJobDone clientRating={clientRating} onHome={() => { resetMarketplace(); setScreen("dashboard"); }} />;
+  return (
+    <>
+      {content}
+      {newOfferAlert && screen !== "job" && screen !== "request" && (
+        <IncomingOfferAlert
+          categoryLabel={newOfferAlert.service}
+          address={newOfferAlert.address}
+          onView={() => { setSelectedOffer(newOfferAlert); setNewOfferAlert(null); setScreen("request"); }}
+          onDismiss={() => setNewOfferAlert(null)}
+        />
+      )}
+    </>
+  );
 }

@@ -408,14 +408,19 @@ export async function getAvailableOffersForProfessional(category: ServiceCategor
 
 // Suscribe a los cambios de la bolsa de solicitudes disponibles de una
 // categoría (nuevas solicitudes, ampliación de radio, alguien más la acepta).
-export function subscribeToAvailableOffers(category: ServiceCategory, onChange: (row: ServiceRequest) => void): () => void {
+// eventType permite distinguir una fila genuinamente nueva (INSERT, digna de
+// un aviso) de una fila ya conocida que solo cambió (UPDATE).
+export function subscribeToAvailableOffers(
+  category: ServiceCategory,
+  onChange: (row: ServiceRequest, eventType: "INSERT" | "UPDATE" | "DELETE") => void,
+): () => void {
   if (config.MOCK_MODE) return () => {};
   const channel = supabase
     .channel(`offers-${category}`)
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "service_requests", filter: `category=eq.${category}` },
-      (payload) => onChange(rowToServiceRequest(payload.new)),
+      (payload) => onChange(rowToServiceRequest(payload.new), payload.eventType as "INSERT" | "UPDATE" | "DELETE"),
     )
     .subscribe();
   return () => { supabase.removeChannel(channel); };
