@@ -24,7 +24,7 @@ import catTecnicoLavadoras from "@/assets/photos/cat-tecnico-lavadoras.jpg";
 import {
   MapPin, Shield, Star, ChevronDown, Menu, X,
   Zap, Droplets, Wind, Wrench, Paintbrush,
-  MessageSquare, Navigation, Clock, Phone, Mail, FileCheck,
+  MessageSquare, Navigation, Clock, Mail, FileCheck,
   BadgeCheck, AlertTriangle, BarChart3, Smartphone,
   ArrowRight, Briefcase, Car,
   DollarSign,
@@ -425,7 +425,7 @@ function LandingContact() {
           <p className="text-slate-500 text-lg max-w-lg mx-auto">Para solicitar un servicio o registrarte como profesional, usá los botones de arriba — acá te dejamos cómo contactarnos directamente.</p>
         </div>
         <div className="flex flex-wrap justify-center gap-6 pt-10 border-t" style={{ borderColor: "#E5E7EB" }}>
-          {[{ icon: Mail, t: "contacto@magiver.com" }, { icon: Phone, t: "+591 700 00000" }, { icon: MapPin, t: "Santa Cruz de la Sierra, Bolivia" }].map(({ icon: Icon, t }) => (
+          {[{ icon: Mail, t: "contacto@magiver.com.bo" }, { icon: MapPin, t: "Santa Cruz de la Sierra, Bolivia" }].map(({ icon: Icon, t }) => (
             <div key={t} className="flex items-center gap-2 text-slate-400 text-sm">
               <Icon className="w-4 h-4 flex-shrink-0" style={{ color: LIME }} />{t}
             </div>
