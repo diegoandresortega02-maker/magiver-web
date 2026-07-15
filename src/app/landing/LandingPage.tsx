@@ -240,7 +240,7 @@ function LandingServices({ onClient }: { onClient: () => void }) {
           <LimeBtn onClick={onClient} className="text-base px-10 py-4">
             <MapPin className="w-4 h-4" />Solicitar un servicio ahora
           </LimeBtn>
-          <p className="text-slate-400 text-sm mt-3">Sin registro previo · Profesionales verificados · GPS cercano</p>
+          <p className="text-slate-400 text-sm mt-3">Registro rápido y gratis · Profesionales verificados · GPS cercano</p>
         </div>
       </div>
     </section>
@@ -379,11 +379,11 @@ function LandingSecurity() {
 function LandingFAQ() {
   const [open, setOpen] = useState<number | null>(null);
   const faqs = [
-    { q: "¿Cómo funciona el modelo marketplace?", a: "Los clientes publican una solicitud y profesionales verificados cercanos la reciben. El cliente elige con quién trabajar según perfil, calificación y distancia." },
+    { q: "¿Cómo funciona el modelo marketplace?", a: "El cliente publica una solicitud y se transmite en tiempo real a los profesionales verificados cercanos de esa categoría. El primero en aceptarla se queda con el trabajo, como en apps de transporte." },
     { q: "¿Cómo se coordina el precio del trabajo?", a: "El precio se coordina directamente entre el cliente y el profesional a través del chat de MAGIVER. Cada trabajo es único y el acuerdo es libre entre las partes." },
     { q: "¿Cómo se verifica a los profesionales?", a: "Cada profesional sube su CI (anverso, reverso y selfie) y certificados opcionales. Un administrador MAGIVER revisa y aprueba manualmente cada solicitud." },
     { q: "¿Qué pasa en caso de emergencia?", a: "MAGIVER tiene disponibilidad 24/7 con soporte humano en todo momento." },
-    { q: "¿Hay costo para registrarme como profesional?", a: "El registro básico es gratuito. MAGIVER opera bajo comisión por servicio completado, sin cuotas mensuales." },
+    { q: "¿Hay costo para registrarme como profesional?", a: "Por ahora el registro y el uso de MAGIVER son completamente gratuitos para los profesionales. Más adelante se introducirá una suscripción mensual para profesionales; los clientes nunca pagan por usar la app." },
   ];
   return (
     <section id="ayuda" className="py-24 bg-white">
