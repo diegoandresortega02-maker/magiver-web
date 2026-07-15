@@ -5,6 +5,7 @@ import { LandingPage } from "./landing/LandingPage";
 import { ClientePortal } from "./client/ClientePortal";
 import { ProfesionalPortal } from "./pro/ProfesionalPortal";
 import { AdminPortal } from "./admin/AdminPortal";
+import { PrivacyPolicyPage } from "./legal/PrivacyPolicyPage";
 import { ArrowRight } from "lucide-react";
 
 // ─── PAGE: 404 ────────────────────────────────────────────────────────────────
@@ -43,6 +44,7 @@ const router = createBrowserRouter([
       { path: "cliente",      Component: ClientePortal },
       { path: "profesional",  Component: ProfesionalPortal },
       { path: "admin",        Component: AdminPortal },
+      { path: "privacidad",   Component: PrivacyPolicyPage },
       { path: "*",            Component: NotFoundPage },
     ],
   },

@@ -438,6 +438,7 @@ function LandingContact() {
 
 function LandingFooter({ onClient, onPro, onAdmin }: { onClient: () => void; onPro: () => void; onAdmin: () => void }) {
   const [legalTab, setLegalTab] = useState<LegalTab | null>(null);
+  const navigate = useNavigate();
 
   return (
     <footer className="pt-14 pb-8 border-t" style={{ background: NAVY, borderColor: "rgba(255,255,255,0.08)" }}>
@@ -483,7 +484,7 @@ function LandingFooter({ onClient, onPro, onAdmin }: { onClient: () => void; onP
               Términos y Condiciones
             </button>
             <button
-              onClick={() => setLegalTab("privacidad")}
+              onClick={() => navigate("/privacidad")}
               className="text-slate-400 hover:text-white text-xs transition-colors">
               Política de Privacidad
             </button>
