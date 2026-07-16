@@ -6,6 +6,7 @@ import { ClientePortal } from "./client/ClientePortal";
 import { ProfesionalPortal } from "./pro/ProfesionalPortal";
 import { AdminPortal } from "./admin/AdminPortal";
 import { PrivacyPolicyPage } from "./legal/PrivacyPolicyPage";
+import { TermsPage } from "./legal/TermsPage";
 import { ArrowRight } from "lucide-react";
 
 // ─── PAGE: 404 ────────────────────────────────────────────────────────────────
@@ -45,6 +46,7 @@ const router = createBrowserRouter([
       { path: "profesional",  Component: ProfesionalPortal },
       { path: "admin",        Component: AdminPortal },
       { path: "privacidad",   Component: PrivacyPolicyPage },
+      { path: "terminos",     Component: TermsPage },
       { path: "*",            Component: NotFoundPage },
     ],
   },

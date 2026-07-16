@@ -32,7 +32,6 @@ import {
   CarFront, PawPrint, KeyRound, WashingMachine,
 } from "lucide-react";
 import { NAVY, LIME, LIGHT, LogoIcon, LimeBtn, DevStatus } from "../ui/primitives";
-import { LegalModal, type LegalTab } from "../legal/LegalModal";
 
 // ─── LANDING ────────────────────────────────────────────────────────────────
 function LandingHeader({ onClient, onPro, onAdmin }: { onClient: () => void; onPro: () => void; onAdmin: () => void }) {
@@ -437,12 +436,10 @@ function LandingContact() {
 }
 
 function LandingFooter({ onClient, onPro, onAdmin }: { onClient: () => void; onPro: () => void; onAdmin: () => void }) {
-  const [legalTab, setLegalTab] = useState<LegalTab | null>(null);
   const navigate = useNavigate();
 
   return (
     <footer className="pt-14 pb-8 border-t" style={{ background: NAVY, borderColor: "rgba(255,255,255,0.08)" }}>
-      {legalTab && <LegalModal defaultTab={legalTab} onClose={() => setLegalTab(null)} />}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-10 mb-12">
           <div className="sm:col-span-2 lg:col-span-1">
@@ -479,7 +476,7 @@ function LandingFooter({ onClient, onPro, onAdmin }: { onClient: () => void; onP
           <p className="text-slate-500 text-xs">© 2025 MAGIVER. Todos los derechos reservados.</p>
           <div className="flex flex-wrap items-center justify-center gap-5">
             <button
-              onClick={() => setLegalTab("cliente")}
+              onClick={() => navigate("/terminos")}
               className="text-slate-400 hover:text-white text-xs transition-colors">
               Términos y Condiciones
             </button>
