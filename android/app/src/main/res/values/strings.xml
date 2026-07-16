@@ -4,4 +4,6 @@
     <string name="title_activity_main">MAGIVER</string>
     <string name="package_name">com.magiver.app</string>
     <string name="custom_url_scheme">com.magiver.app</string>
+    <string name="facebook_app_id">1069702622281483</string>
+    <string name="facebook_client_token">b841b3f84543e7e64f497b18449cf2ab</string>
 </resources>
