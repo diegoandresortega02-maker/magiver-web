@@ -277,7 +277,7 @@ export function ProDocuments({ user, onSubmit, onBack, viewOnly = false, docs }:
         <div className="flex flex-col gap-5">
           <p className="text-xs font-bold uppercase tracking-wider" style={{ color: LIME }}>Cédula de identidad (obligatorio)</p>
           <DocUpload label="CI Anverso (frente)" value={ciFront} onSet={setCiFront} type="ci_front" required hint={viewOnly ? undefined : "Foto clara del frente de tu carnet"} />
-          <DocUpload label="CI Reverso (dorso)" value={ciBack} onSet={setCiBack} type="ci_back" hint={viewOnly ? undefined : "Foto clara del reverso de tu carnet"} />
+          <DocUpload label="CI Reverso (dorso)" value={ciBack} onSet={setCiBack} type="ci_back" required hint={viewOnly ? undefined : "Foto clara del reverso de tu carnet"} />
           <DocUpload label="Selfie sosteniendo CI" value={selfie} onSet={setSelfie} type="selfie" required hint={viewOnly ? undefined : "Foto tuya sosteniendo tu CI junto a tu rostro"} />
 
           <p className="text-xs font-bold uppercase tracking-wider mt-2" style={{ color: LIME }}>Certificados profesionales (opcional)</p>
@@ -307,15 +307,15 @@ export function ProDocuments({ user, onSubmit, onBack, viewOnly = false, docs }:
             </div>
           )}
 
-          {!viewOnly && (!ciFront || !selfie) && (
+          {!viewOnly && (!ciFront || !ciBack || !selfie) && (
             <div className="p-3 rounded-xl flex items-center gap-2" style={{ background: "#FEF3C7" }}>
               <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />
-              <p className="text-xs text-amber-700">Se requiere CI anverso y selfie con CI para continuar</p>
+              <p className="text-xs text-amber-700">Se requiere CI anverso, CI reverso y selfie con CI para continuar</p>
             </div>
           )}
 
           {!viewOnly && (
-            <LimeBtn onClick={() => { setLoading(true); setTimeout(() => onSubmit({ ciFront, ciBack, selfie, certificates: certs }), 600); }} disabled={loading || !ciFront || !selfie || uploadingKey !== null} className="w-full py-4 text-base mt-2">
+            <LimeBtn onClick={() => { setLoading(true); setTimeout(() => onSubmit({ ciFront, ciBack, selfie, certificates: certs }), 600); }} disabled={loading || !ciFront || !ciBack || !selfie || uploadingKey !== null} className="w-full py-4 text-base mt-2">
               {loading ? <><Loader2 className="w-4 h-4 animate-spin" />Enviando solicitud...</> : <>Enviar para verificación <Send className="w-4 h-4" /></>}
             </LimeBtn>
           )}
