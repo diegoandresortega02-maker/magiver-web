@@ -82,7 +82,7 @@ export function ClientAuth({ onDone, onBack }: { onDone: (u: ClientUser) => void
                 <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />{authError}
               </p>
             )}
-            <LimeBtn type="submit" disabled={loading || (tab === "register" && !termsAccepted)} className="w-full py-3.5 text-base mt-1">
+            <LimeBtn type="submit" disabled={loading || (tab === "register" && (!name.trim() || !phone.trim() || !termsAccepted))} className="w-full py-3.5 text-base mt-1">
               {loading ? <><Loader2 className="w-4 h-4 animate-spin" />Ingresando...</> : tab === "register" ? "Crear mi cuenta" : "Ingresar"}
             </LimeBtn>
           </form>
