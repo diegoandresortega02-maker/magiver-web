@@ -23,6 +23,7 @@ export function IntroSplash() {
     }
   });
   const [fading, setFading] = useState(false);
+  const [playing, setPlaying] = useState(false);
   const srcRef = useRef<string>(visible ? pickIntroSrc() : "");
   const finishedRef = useRef(false);
 
@@ -59,9 +60,12 @@ export function IntroSplash() {
         autoPlay
         muted
         playsInline
+        preload="auto"
+        onPlaying={() => setPlaying(true)}
         onEnded={finish}
         onError={finish}
         className="w-full h-full object-cover"
+        style={{ opacity: playing ? 1 : 0 }}
       />
     </div>
   );
