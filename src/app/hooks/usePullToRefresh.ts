@@ -47,14 +47,13 @@ export function usePullToRefresh<T extends HTMLElement>() {
       if (rawDelta <= 0) { setPullDistance(0); return; }
       e.preventDefault();
       // Resistencia progresiva tipo "rubber band" (como en iOS/apps nativas).
-      // SENSITIVITY es la respuesta inicial (0.6 = el indicador avanza 0.6px
-      // por cada px que baja el dedo, ya desde el arranque del gesto, no
-      // solo cerca del máximo) — antes era ~1.1 al principio, por eso se
-      // sentía demasiado fácil disparar el refresh. Con esto, llegar al
-      // umbral (1/4 de pantalla) pide un arrastre de dedo bastante más
-      // largo, sin perder la sensación elástica/suave.
+      // SENSITIVITY es la respuesta inicial (0.45 = el indicador avanza
+      // 0.45px por cada px que baja el dedo, ya desde el arranque del
+      // gesto) — con 0.6 seguía sintiéndose fácil, así que se bajó de
+      // nuevo. Llegar al umbral (1/4 de pantalla) ahora pide un arrastre
+      // de dedo de casi toda la altura de la pantalla.
       const max = maxPull();
-      const SENSITIVITY = 0.6;
+      const SENSITIVITY = 0.45;
       const damped = max * (1 - Math.exp((-rawDelta * SENSITIVITY) / max));
       setPullDistance(damped);
     };
