@@ -3,7 +3,7 @@ import { useNavigate } from "react-router";
 import { config } from "@/lib/config";
 import { loadSession, logout } from "@/lib/auth";
 import { distanceKm as haversineKm } from "@/lib/geo";
-import { SessionLoading, IncomingOfferAlert } from "../ui/primitives";
+import { SessionLoading, IncomingOfferAlert, CancelledJobModal } from "../ui/primitives";
 import {
   getActiveRequestForProfessional, subscribeToRequestChanges, updateMyPresence,
   updateJobStatus, getAvailableOffersForProfessional, subscribeToAvailableOffers, getRejectedRequestIds,
@@ -37,6 +37,7 @@ export function ProfesionalPortal() {
   const [proDocuments, setProDocuments] = useState<DocumentSet | null>(null);
   const [checkingSession, setCheckingSession] = useState(!config.MOCK_MODE);
   const [cancelNotice, setCancelNotice] = useState("");
+  const [showCancelledModal, setShowCancelledModal] = useState(false);
 
   // Restaura la sesión si ya había una guardada (ver mismo fix en
   // ClientePortal) — antes siempre arrancaba en "auth" sin revisar si el
@@ -213,7 +214,7 @@ export function ProfesionalPortal() {
   else if (screen === "history") content = <ProJobHistory user={proUser!} onBack={() => setScreen("dashboard")} />;
   else if (screen === "profile") content = <ProProfile user={proUser!} onSave={u => { setProUser(u); setScreen("dashboard"); }} onDocuments={() => setScreen("docview")} onBack={() => setScreen("dashboard")} onLogout={() => { logout(); resetMarketplace(); setProUser(null); navigate("/"); }} />;
   else if (screen === "request") content = <ProRequestDetail request={selectedOffer ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} proLocation={proPosition} onAccepted={handleOfferAccepted} onRejected={handleOfferRejected} onBack={() => { setSelectedOffer(null); setScreen("dashboard"); }} />;
-  else if (screen === "job") content = <ProActiveJob request={activeRequest ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} jobStatus={jobStatus} messages={chatMessages} professionalId={proUser?.id} proLocation={proPosition} onStatusChange={handleProStatus} onSendMessage={handleProMsg} onFinish={handleJobFinish} onCancelled={() => { resetMarketplace(); setScreen("dashboard"); }} onCancelledByClient={() => { setCancelNotice("El cliente canceló esta solicitud."); resetMarketplace(); setScreen("dashboard"); }} onBack={() => setScreen("dashboard")} />;
+  else if (screen === "job") content = <ProActiveJob request={activeRequest ?? { service: "Electricista", description: "Revisión del tablero eléctrico.", address: "Calle Los Pinos #342, Equipetrol" }} jobStatus={jobStatus} messages={chatMessages} professionalId={proUser?.id} proLocation={proPosition} onStatusChange={handleProStatus} onSendMessage={handleProMsg} onFinish={handleJobFinish} onCancelled={() => { resetMarketplace(); setScreen("dashboard"); }} onCancelledByClient={() => { setCancelNotice("El cliente canceló esta solicitud."); setShowCancelledModal(true); resetMarketplace(); setScreen("dashboard"); }} onBack={() => setScreen("dashboard")} />;
   else if (screen === "rateClient") content = <ProRateClient clientName={activeRequest?.clientName} requestId={activeRequest?.id} onSubmit={() => setScreen("done")} />;
   else if (screen === "done") content = <ProJobDone clientRating={clientRating} onHome={() => { resetMarketplace(); setScreen("dashboard"); }} />;
   return (
@@ -226,6 +227,9 @@ export function ProfesionalPortal() {
           onView={() => { setSelectedOffer(newOfferAlert); setNewOfferAlert(null); setScreen("request"); }}
           onDismiss={() => setNewOfferAlert(null)}
         />
+      )}
+      {showCancelledModal && (
+        <CancelledJobModal message={cancelNotice} onAccept={() => setShowCancelledModal(false)} />
       )}
     </>
   );

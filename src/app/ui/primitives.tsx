@@ -262,6 +262,24 @@ export function IncomingOfferAlert({ categoryLabel, address, onView, onDismiss }
   );
 }
 
+// Popup bloqueante (no un banner) para cuando la otra parte cancela un
+// trabajo ya aceptado mientras el usuario está usando la app — el aviso vía
+// push (send-cancel-push) cubre el caso de la app en segundo plano.
+export function CancelledJobModal({ message, onAccept }: { message: string; onAccept: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" style={{ background: "rgba(15,23,42,0.75)", backdropFilter: "blur(4px)" }}>
+      <div className="w-full max-w-sm bg-white rounded-2xl p-6 shadow-2xl text-center">
+        <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: "#FEF3C7" }}>
+          <AlertCircle className="w-7 h-7 text-amber-500" />
+        </div>
+        <h3 className="font-black text-lg mb-2" style={{ color: NAVY }}>Solicitud cancelada</h3>
+        <p className="text-slate-500 text-sm mb-6 leading-relaxed">Lamentamos que esta solicitud se haya cancelado. {message}</p>
+        <LimeBtn onClick={onAccept} className="w-full py-3">Aceptar</LimeBtn>
+      </div>
+    </div>
+  );
+}
+
 export function JobHistoryCard({ categoryLabel, counterpartName, dateLabel, rating, amount, photoUrls, notes }: {
   categoryLabel: string; counterpartName: string; dateLabel: string;
   rating?: number; amount?: number; photoUrls: string[]; notes?: string;
