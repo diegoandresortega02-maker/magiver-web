@@ -120,7 +120,12 @@ export function RealMap({ markers, zoom = 14, heading, onMarkerDragEnd, onMapCli
       map.fitBounds(bounds, 48);
       boundsFittedRef.current = true;
     }
-  }, [markersKey]);
+    // "ready"/"hasMarkers" están acá además de markersKey: el mapa recién
+    // existe (mapRef.current) el mismo render en que "ready" pasa a true,
+    // pero si en ese momento markersKey no cambió respecto al render
+    // anterior, este efecto no se disparaba solo — el pin quedaba invisible
+    // hasta el primer clic/drag (que sí cambia markersKey).
+  }, [markersKey, ready, hasMarkers]);
 
   // El rumbo cambia mucho más seguido que la posición — actualiza solo el
   // ícono del marcador propio en vez de tocar el resto del mapa en cada
