@@ -1,5 +1,6 @@
 import { createBrowserRouter, RouterProvider, Outlet, useNavigate } from "react-router";
 import { NAVY, LogoIcon, LimeBtn } from "./ui/primitives";
+import { IntroSplash } from "./IntroSplash";
 import { AppContextProvider } from "./context/AppContext";
 import { LandingPage } from "./landing/LandingPage";
 import { ClientePortal } from "./client/ClientePortal";
@@ -54,5 +55,10 @@ const router = createBrowserRouter([
 
 // ─── Entry point ──────────────────────────────────────────────────────────────
 export default function App() {
-  return <RouterProvider router={router} />;
+  return (
+    <>
+      <RouterProvider router={router} />
+      <IntroSplash />
+    </>
+  );
 }
