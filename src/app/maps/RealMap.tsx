@@ -48,7 +48,10 @@ export function RealMap({ markers, zoom = 14, heading, onMarkerDragEnd, onMapCli
   onMarkerDragEndRef.current = onMarkerDragEnd;
   const onMapClickRef = useRef(onMapClick);
   onMapClickRef.current = onMapClick;
+  const mapRef = useRef<any>(null);
   const markerInstancesRef = useRef<Record<string, any>>({});
+  const boundsFittedRef = useRef(false);
+  const hasMarkers = markers.length > 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -58,43 +61,70 @@ export function RealMap({ markers, zoom = 14, heading, onMarkerDragEnd, onMapCli
     return () => { cancelled = true; };
   }, []);
 
+  // El mapa se crea UNA sola vez (apenas hay al menos un marcador) y después
+  // se reutiliza siempre la misma instancia — antes se destruía y recreaba
+  // por completo en cada cambio de posición, lo que recentraba la cámara de
+  // golpe cada vez que alguien arrastraba o tocaba el pin (se sentía como
+  // que "no dejaba" moverlo libremente, o que el mapa se reseteaba solo).
   useEffect(() => {
-    if (!ready || !ref.current || markers.length === 0) return;
+    if (!ready || !ref.current || mapRef.current || !hasMarkers) return;
     const g = (window as any).google;
-    const map = new g.maps.Map(ref.current, {
+    mapRef.current = new g.maps.Map(ref.current, {
       center: { lat: markers[0].lat, lng: markers[0].lng }, zoom,
       disableDefaultUI: true, zoomControl: true, clickableIcons: false, styles: MINIMAL_MAP_STYLE,
     });
+    if (onMapClickRef.current) {
+      mapRef.current.addListener("click", (e: any) => onMapClickRef.current?.(e.latLng.lat(), e.latLng.lng()));
+    }
+  }, [ready, hasMarkers]);
+
+  useEffect(() => { mapRef.current?.setZoom(zoom); }, [zoom]);
+
+  // Sincroniza los marcadores con el mapa ya existente: mueve los que ya
+  // están, crea los nuevos, saca los que desaparecieron — sin recrear el
+  // mapa ni tocar la cámara del usuario en cada actualización.
+  useEffect(() => {
+    const map = mapRef.current;
+    const g = (window as any).google;
+    if (!map || !g) return;
+    const seenIds = new Set(markers.map(m => m.id));
+    Object.keys(markerInstancesRef.current).forEach(id => {
+      if (!seenIds.has(id)) { markerInstancesRef.current[id].setMap(null); delete markerInstancesRef.current[id]; }
+    });
     const bounds = new g.maps.LatLngBounds();
-    const instances: Record<string, any> = {};
     markers.forEach(m => {
       const color = m.color ?? NAVY;
       const isSelf = m.id === SELF_MARKER_ID;
       const iconUrl = isSelf ? selfIconUrl(color, heading ?? null) : pinIconUrl(color, m.label, m.labelColor ?? NAVY);
-      const size = isSelf ? 40 : 40;
-      const marker = new g.maps.Marker({
-        position: { lat: m.lat, lng: m.lng }, map, title: m.label, draggable: !!m.draggable,
-        icon: { url: iconUrl, scaledSize: new g.maps.Size(size, size), anchor: new g.maps.Point(size / 2, size / 2) },
-      });
-      if (m.draggable) {
-        marker.addListener("dragend", () => {
-          const pos = marker.getPosition();
-          onMarkerDragEndRef.current?.(m.id, pos.lat(), pos.lng());
-        });
+      const icon = { url: iconUrl, scaledSize: new g.maps.Size(40, 40), anchor: new g.maps.Point(20, 20) };
+      let marker = markerInstancesRef.current[m.id];
+      if (!marker) {
+        marker = new g.maps.Marker({ position: { lat: m.lat, lng: m.lng }, map, title: m.label, draggable: !!m.draggable, icon });
+        if (m.draggable) {
+          marker.addListener("dragend", () => {
+            const pos = marker.getPosition();
+            onMarkerDragEndRef.current?.(m.id, pos.lat(), pos.lng());
+          });
+        }
+        markerInstancesRef.current[m.id] = marker;
+      } else {
+        marker.setPosition({ lat: m.lat, lng: m.lng });
+        if (!isSelf) marker.setIcon(icon);
       }
-      instances[m.id] = marker;
       bounds.extend({ lat: m.lat, lng: m.lng });
     });
-    markerInstancesRef.current = instances;
-    if (onMapClickRef.current) {
-      map.addListener("click", (e: any) => onMapClickRef.current?.(e.latLng.lat(), e.latLng.lng()));
+    // Encuadra ambos marcadores solo la primera vez que aparecen juntos —
+    // actualizaciones posteriores (ej. el profesional moviéndose en vivo)
+    // no deben reencuadrar/mover la cámara que el usuario ya está mirando.
+    if (!boundsFittedRef.current && markers.length > 1) {
+      map.fitBounds(bounds, 48);
+      boundsFittedRef.current = true;
     }
-    if (markers.length > 1) map.fitBounds(bounds, 48);
-  }, [ready, markersKey, zoom]);
+  }, [markersKey]);
 
   // El rumbo cambia mucho más seguido que la posición — actualiza solo el
-  // ícono del marcador propio en vez de recrear todo el mapa en cada lectura
-  // de la brújula.
+  // ícono del marcador propio en vez de tocar el resto del mapa en cada
+  // lectura de la brújula.
   useEffect(() => {
     const g = (window as any).google;
     const selfMarker = markerInstancesRef.current[SELF_MARKER_ID];
