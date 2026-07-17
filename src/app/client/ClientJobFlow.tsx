@@ -9,7 +9,7 @@ import {
 import { NAVY, LIME, LIGHT, AppHeader, ScreenWrap, ProAvatar, LimeBtn, DangerBtn, Card, StatusBadge } from "../ui/primitives";
 import { LiveMap, RealMap } from "../maps/RealMap";
 import { reverseGeocode } from "../maps/googleMaps";
-import { SERVICES, PROFESSIONALS, proUserToProfessional, specialtyLabel, apiStatusToLocal } from "../lib.local/mappers";
+import { SERVICES, PROFESSIONALS, proUserToProfessional, specialtyLabel, apiStatusToLocal, PLACE_TYPES } from "../lib.local/mappers";
 import { subscribeToPushNotifications } from "../hooks/usePushSubscription";
 import type { ClientUser, Professional, ServiceRequest } from "../types.local";
 
@@ -206,6 +206,8 @@ export function ClientMap({ service, clientLocation, onRequest, onBack }: { serv
 export function ClientRequest({ service, clientLocation, onSubmit, onBack }: { service: string; clientLocation?: GeoPoint | null; onSubmit: (req: ServiceRequest) => void; onBack: () => void }) {
   const [desc, setDesc] = useState(""); const [addr, setAddr] = useState("Calle Los Pinos #342, Equipetrol");
   const [addrEdited, setAddrEdited] = useState(false);
+  const [addrNumber, setAddrNumber] = useState("");
+  const [placeType, setPlaceType] = useState<string>("");
   const [detectingAddr, setDetectingAddr] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -246,17 +248,17 @@ export function ClientRequest({ service, clientLocation, onSubmit, onBack }: { s
     try {
       if (config.MOCK_MODE) {
         await new Promise(r => setTimeout(r, 800));
-        onSubmit({ id: `req-${Date.now()}`, service, description: desc, address: addr, lat: pinLocation?.lat, lng: pinLocation?.lng });
+        onSubmit({ id: `req-${Date.now()}`, service, description: desc, address: addr, lat: pinLocation?.lat, lng: pinLocation?.lng, addressNumber: addrNumber || undefined, placeType: placeType || undefined });
         return;
       }
       const categoryId = (SERVICES.find(s => s.label === service)?.id ?? "otro") as any;
       const location = pinLocation ?? SANTA_CRUZ_CENTER;
       const real = await createServiceRequest({
         category: categoryId, description: desc,
-        address: { street: addr, zone: "", city: "Santa Cruz de la Sierra", lat: location.lat, lng: location.lng },
+        address: { street: addr, zone: "", city: "Santa Cruz de la Sierra", lat: location.lat, lng: location.lng, number: addrNumber || undefined, placeType: (placeType || undefined) as any },
       });
       subscribeToPushNotifications();
-      onSubmit({ id: real.id, service, description: desc, address: addr, lat: location.lat, lng: location.lng });
+      onSubmit({ id: real.id, service, description: desc, address: addr, lat: location.lat, lng: location.lng, addressNumber: addrNumber || undefined, placeType: placeType || undefined });
     } catch (err: any) {
       setError(err?.message || "No se pudo enviar la solicitud. Intenta de nuevo.");
     } finally {
@@ -298,6 +300,27 @@ export function ClientRequest({ service, clientLocation, onSubmit, onBack }: { s
               {detectingAddr && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 animate-spin" />}
             </div>
             <p className="text-xs text-slate-400 mt-1">{clientLocation ? "Detectada con tu GPS — ajusta el pin o edita el texto si es para otro lugar." : "Escribe la dirección exacta."}</p>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: NAVY }}>Número de casa/depto (opcional)</label>
+            <input type="text" placeholder="Ej. Casa 12, Depto 3B, Piso 2..." value={addrNumber} onChange={e => setAddrNumber(e.target.value)} className="w-full px-4 py-3 rounded-xl border text-sm outline-none bg-white" style={{ borderColor: "#E5E7EB", color: NAVY }} />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: NAVY }}>Tipo de lugar (opcional)</label>
+            <div className="grid grid-cols-4 gap-2">
+              {PLACE_TYPES.map(pt => {
+                const checked = placeType === pt.id;
+                const Icon = pt.icon;
+                return (
+                  <button key={pt.id} type="button" onClick={() => setPlaceType(checked ? "" : pt.id)}
+                    className="flex flex-col items-center gap-1.5 px-2 py-3 rounded-xl border-2 text-center transition-colors"
+                    style={{ borderColor: checked ? LIME : "#E5E7EB", background: checked ? "#F7FEE7" : "#fff" }}>
+                    <Icon className="w-4 h-4" style={{ color: checked ? "#4D7C0F" : "#94A3B8" }} />
+                    <span className="text-xs leading-tight" style={{ color: checked ? NAVY : "#64748B" }}>{pt.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
           <div className="p-4 rounded-xl border" style={{ background: "#FFFBEB", borderColor: "#FDE68A" }}>
             <div className="flex items-start gap-2"><MessageSquare className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" /><p className="text-xs text-amber-700 leading-relaxed">El precio se coordina directamente entre tú y el profesional a través del chat.</p></div>

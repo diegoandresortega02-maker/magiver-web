@@ -29,6 +29,7 @@ export interface ServiceRequest {
   service: string; description: string; address: string;
   id?: string; professionalId?: string; agreedPrice?: number; completionPhotoUrls?: string[];
   clientName?: string; lat?: number; lng?: number; searchRadiusKm?: number;
+  addressNumber?: string; placeType?: string;
 }
 
 export type JobStatus = "idle" | "searching" | "matched" | "en_camino" | "en_sitio" | "completado";

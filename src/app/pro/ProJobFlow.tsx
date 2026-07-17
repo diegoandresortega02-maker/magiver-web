@@ -11,7 +11,7 @@ import { NAVY, LIME, AppHeader, ScreenWrap, Card, StatusBadge, LimeBtn, DangerBt
 import { LiveMap } from "../maps/RealMap";
 import { MapView } from "../maps/MapView";
 import { useDeviceHeading } from "../hooks/useDeviceHeading";
-import { PRO_REASONS } from "../lib.local/mappers";
+import { PRO_REASONS, placeTypeLabel } from "../lib.local/mappers";
 import type { ServiceRequest, JobStatus, Message } from "../types.local";
 
 // ─── PRO REQUEST ──────────────────────────────────────────────────────────────
@@ -75,7 +75,17 @@ export function ProRequestDetail({ request, proLocation, onAccepted, onRejected,
           </div>
           <div className="flex flex-col gap-2 text-sm">
             <div className="flex gap-2"><span className="text-slate-500 flex-shrink-0 w-24">Descripción:</span><span style={{ color: NAVY }}>{request.description}</span></div>
-            <div className="flex gap-2 items-start"><MapPin className="w-4 h-4 text-slate-400 flex-shrink-0 mt-0.5" /><span style={{ color: NAVY }}>{request.address}</span></div>
+            <div className="flex gap-2 items-start">
+              <MapPin className="w-4 h-4 text-slate-400 flex-shrink-0 mt-0.5" />
+              <span style={{ color: NAVY }}>
+                {request.address}
+                {(request.addressNumber || request.placeType) && (
+                  <span className="block text-xs text-slate-500 mt-0.5">
+                    {[request.addressNumber, placeTypeLabel(request.placeType)].filter(Boolean).join(" · ")}
+                  </span>
+                )}
+              </span>
+            </div>
           </div>
         </Card>
         <Card className="mb-4">
@@ -215,7 +225,17 @@ export function ProActiveJob({ request, jobStatus, messages, professionalId, pro
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Servicio</p>
               <p className="font-bold" style={{ color: NAVY }}>{request.service}</p>
               <p className="text-sm text-slate-500 mt-1 leading-relaxed">{request.description}</p>
-              <div className="flex items-center gap-2 mt-2 text-sm text-slate-500"><MapPin className="w-4 h-4 flex-shrink-0" style={{ color: LIME }} />{request.address}</div>
+              <div className="flex items-start gap-2 mt-2 text-sm text-slate-500">
+                <MapPin className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: LIME }} />
+                <span>
+                  {request.address}
+                  {(request.addressNumber || request.placeType) && (
+                    <span className="block text-xs mt-0.5">
+                      {[request.addressNumber, placeTypeLabel(request.placeType)].filter(Boolean).join(" · ")}
+                    </span>
+                  )}
+                </span>
+              </div>
             </Card>
             {jobStatus !== "completado" && (
               <div className="mb-5">

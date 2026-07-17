@@ -10,7 +10,7 @@ import type {
   PaginatedResponse,
   ServiceRequest, JobStatus as ApiJobStatus,
   ChatMessage, Review, PendingVerification, AdminStats,
-  GeoPoint, ServiceCategory, ProUser,
+  GeoPoint, ServiceCategory, ProUser, PlaceType,
 } from "./types";
 
 // ─── Profesionales ────────────────────────────────────────────────────────────
@@ -112,7 +112,7 @@ export interface CreateRequestPayload {
   professionalId?: string;
   category: ServiceCategory;
   description: string;
-  address: { street: string; zone: string; city: string; lat: number; lng: number };
+  address: { street: string; zone: string; city: string; lat: number; lng: number; number?: string; placeType?: PlaceType };
 }
 
 function rowToServiceRequest(row: any): ServiceRequest {
@@ -122,6 +122,7 @@ function rowToServiceRequest(row: any): ServiceRequest {
     address: {
       street: row.address_street ?? "", zone: row.address_zone ?? "", city: row.address_city ?? "",
       coordinates: row.address_lat != null ? { lat: row.address_lat, lng: row.address_lng } : undefined,
+      number: row.address_number ?? undefined, placeType: row.address_type ?? undefined,
     },
     status: row.status, agreedPrice: row.agreed_price != null ? Number(row.agreed_price) : undefined,
     createdAt: row.created_at, updatedAt: row.updated_at, completedAt: row.completed_at ?? undefined,
@@ -136,7 +137,7 @@ export async function createServiceRequest(payload: CreateRequestPayload): Promi
     return {
       id: `req-${Date.now()}`, clientId: "client-001", professionalId: payload.professionalId,
       category: payload.category, description: payload.description,
-      address: { street: payload.address.street, zone: payload.address.zone, city: payload.address.city },
+      address: { street: payload.address.street, zone: payload.address.zone, city: payload.address.city, number: payload.address.number, placeType: payload.address.placeType },
       status: "pending", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     };
   }
@@ -149,6 +150,7 @@ export async function createServiceRequest(payload: CreateRequestPayload): Promi
     description: payload.description, address_street: payload.address.street,
     address_zone: payload.address.zone, address_city: payload.address.city,
     address_lat: payload.address.lat, address_lng: payload.address.lng,
+    address_number: payload.address.number ?? null, address_type: payload.address.placeType ?? null,
   }).select().single();
   if (error) throw { code: "db_error", message: error.message };
   return rowToServiceRequest(data);

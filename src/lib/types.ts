@@ -47,11 +47,15 @@ export interface GeoPoint {
   lng: number;
 }
 
+export type PlaceType = "casa" | "departamento" | "oficina" | "empresa";
+
 export interface Address {
   street: string;
   zone: string;
   city: string;
   coordinates?: GeoPoint;
+  number?: string;
+  placeType?: PlaceType;
 }
 
 // ─── Servicios ───────────────────────────────────────────────────────────────

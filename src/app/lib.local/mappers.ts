@@ -3,7 +3,7 @@ import type { ProUser as ApiProUser, ServiceRequest as ApiServiceRequest, GeoPoi
 import {
   Zap, Droplets, Wind, Wrench, Paintbrush, Car,
   Bike, Sparkles, Flame, Leaf, Bug, Calculator, FlaskConical, Atom, Languages,
-  CarFront, PawPrint, KeyRound, WashingMachine,
+  CarFront, PawPrint, KeyRound, WashingMachine, Home, Building2, Briefcase, Building,
 } from "lucide-react";
 import type { Professional, JobStatus, ServiceRequest } from "../types.local";
 
@@ -42,6 +42,19 @@ export const SERVICES = [
 // (dato viejo/mock), lo devuelve tal cual.
 export function specialtyLabel(value: string): string {
   return SERVICES.find(s => s.id === value)?.label ?? value;
+}
+
+// Tipo de lugar del domicilio del servicio (casa, depto, oficina, empresa)
+// — dato extra que el cliente carga al pedir el servicio para que el
+// profesional tenga más contexto para llegar bien.
+export const PLACE_TYPES = [
+  { id: "casa", label: "Casa", icon: Home },
+  { id: "departamento", label: "Departamento", icon: Building2 },
+  { id: "oficina", label: "Oficina", icon: Briefcase },
+  { id: "empresa", label: "Empresa", icon: Building },
+] as const;
+export function placeTypeLabel(value?: string): string {
+  return PLACE_TYPES.find(p => p.id === value)?.label ?? "";
 }
 
 // Motivos predefinidos para rechazar/cancelar (ver ReasonPickerSheet). Los
@@ -100,5 +113,6 @@ export function apiRequestToLocal(r: ApiServiceRequest & { clientName?: string }
     service: specialtyLabel(r.category), description: r.description,
     address: [r.address.street, r.address.zone].filter(Boolean).join(", "),
     lat: r.address.coordinates?.lat, lng: r.address.coordinates?.lng, searchRadiusKm: r.searchRadiusKm,
+    addressNumber: r.address.number, placeType: r.address.placeType,
   };
 }
