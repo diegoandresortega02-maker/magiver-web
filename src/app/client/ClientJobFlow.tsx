@@ -13,6 +13,10 @@ import { SERVICES, PROFESSIONALS, proUserToProfessional, specialtyLabel, apiStat
 import { subscribeToPushNotifications } from "../hooks/usePushSubscription";
 import type { ClientUser, Professional, ServiceRequest } from "../types.local";
 
+// Centro de Santa Cruz de la Sierra — fallback cuando no hay GPS del cliente
+// (permiso denegado, o el navegador todavía no resolvió la ubicación).
+const SANTA_CRUZ_CENTER: GeoPoint = { lat: -17.785, lng: -63.181 };
+
 // ─── CLIENT SERVICES ─────────────────────────────────────────────────────────
 const normalize = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
@@ -121,7 +125,7 @@ export function ClientMap({ service, clientLocation, onRequest, onBack }: { serv
   useEffect(() => {
     if (config.MOCK_MODE) { setProfessionals(PROFESSIONALS); setLoading(false); return; }
     const categoryId = SERVICES.find(s => s.label === service)?.id;
-    const location = clientLocation ?? { lat: -17.785, lng: -63.181 };
+    const location = clientLocation ?? SANTA_CRUZ_CENTER;
     setLoading(true);
     setLoadError("");
     getNearbyProfessionals({ location, category: categoryId as any })
@@ -208,8 +212,17 @@ export function ClientRequest({ service, clientLocation, onSubmit, onBack }: { s
   // Posición exacta a usar para la solicitud: arranca en el GPS detectado,
   // pero el cliente puede arrastrar el pin o tocar el mapa para ajustarla
   // (por si el servicio es para otra dirección).
-  const [pinLocation, setPinLocation] = useState<GeoPoint | null>(null);
-  useEffect(() => { if (clientLocation && !pinLocation) setPinLocation(clientLocation); }, [clientLocation]);
+  // Arranca en el GPS si ya lo tenemos, o si no en el centro de Santa Cruz —
+  // así el mapa (y la posibilidad de mover el pin a mano) siempre aparece,
+  // en vez de quedar oculto en silencio cuando el navegador todavía no
+  // resolvió el permiso de ubicación o el usuario lo denegó.
+  const [pinLocation, setPinLocation] = useState<GeoPoint | null>(clientLocation ?? SANTA_CRUZ_CENTER);
+  useEffect(() => {
+    // Si el GPS llega después del primer render, reemplaza el centro
+    // genérico por la posición real — pero solo si el cliente todavía no
+    // movió el pin a mano (para no pisarle un ajuste ya hecho).
+    if (clientLocation && pinLocation === SANTA_CRUZ_CENTER) setPinLocation(clientLocation);
+  }, [clientLocation]);
   const handlePinChange = (lat: number, lng: number) => {
     setPinLocation({ lat, lng });
     setAddrEdited(false); // mover el pin siempre refresca la dirección detectada
@@ -237,7 +250,7 @@ export function ClientRequest({ service, clientLocation, onSubmit, onBack }: { s
         return;
       }
       const categoryId = (SERVICES.find(s => s.label === service)?.id ?? "otro") as any;
-      const location = pinLocation ?? { lat: -17.785, lng: -63.181 };
+      const location = pinLocation ?? SANTA_CRUZ_CENTER;
       const real = await createServiceRequest({
         category: categoryId, description: desc,
         address: { street: addr, zone: "", city: "Santa Cruz de la Sierra", lat: location.lat, lng: location.lng },
