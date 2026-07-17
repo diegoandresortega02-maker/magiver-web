@@ -10,6 +10,7 @@ import {
 import { NAVY, LIME, AppHeader, ScreenWrap, Card, StatusBadge, LimeBtn, DangerBtn, ReasonPickerSheet } from "../ui/primitives";
 import { LiveMap } from "../maps/RealMap";
 import { MapView } from "../maps/MapView";
+import { useDeviceHeading } from "../hooks/useDeviceHeading";
 import { PRO_REASONS } from "../lib.local/mappers";
 import type { ServiceRequest, JobStatus, Message } from "../types.local";
 
@@ -18,6 +19,7 @@ export function ProRequestDetail({ request, proLocation, onAccepted, onRejected,
   request: ServiceRequest; proLocation?: GeoPoint | null;
   onAccepted: () => void; onRejected: () => void; onBack: () => void;
 }) {
+  const heading = useDeviceHeading(!!proLocation);
   const [loading, setLoading] = useState(false);
   const [acceptError, setAcceptError] = useState("");
   const [showReject, setShowReject] = useState(false);
@@ -89,6 +91,7 @@ export function ProRequestDetail({ request, proLocation, onAccepted, onRejected,
               ...(clientLoc ? [{ id: "cliente", lat: clientLoc.lat, lng: clientLoc.lng, label: request.clientName?.slice(0, 2).toUpperCase() ?? "CL", color: "#8B5CF6" }] : []),
               ...(proLocation ? [{ id: "yo", lat: proLocation.lat, lng: proLocation.lng, label: "Tú", color: LIME, labelColor: NAVY }] : []),
             ]}
+            heading={heading}
             fallback={<MapView selectedProId="1" />}
           />
         </div>
@@ -126,6 +129,7 @@ export function ProActiveJob({ request, jobStatus, messages, professionalId, pro
   onFinish: (photoFiles: File[], note?: string) => Promise<void>; onCancelled: () => void; onCancelledByClient: () => void; onBack: () => void;
 }) {
   const clientLoc = request.lat != null && request.lng != null ? { lat: request.lat, lng: request.lng } : null;
+  const heading = useDeviceHeading(!!proLocation);
   const [completionNote, setCompletionNote] = useState("");
   const [tab, setTab] = useState<"job" | "chat">("job");
   const [msg, setMsg] = useState("");
@@ -220,6 +224,7 @@ export function ProActiveJob({ request, jobStatus, messages, professionalId, pro
                     ...(clientLoc ? [{ id: "cliente", lat: clientLoc.lat, lng: clientLoc.lng, label: request.clientName?.slice(0, 2).toUpperCase() ?? "CL", color: "#8B5CF6" }] : []),
                     ...(proLocation ? [{ id: "yo", lat: proLocation.lat, lng: proLocation.lng, label: "Tú", color: LIME, labelColor: NAVY }] : []),
                   ]}
+                  heading={heading}
                   fallback={<MapView selectedProId="1" />}
                 />
               </div>

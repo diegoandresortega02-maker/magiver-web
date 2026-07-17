@@ -10,6 +10,7 @@ import {
 import { NAVY, LIME, AppHeader, ScreenWrap, Card, StatusBadge, ProAvatar, LimeBtn, ReasonPickerSheet } from "../ui/primitives";
 import { LiveMap } from "../maps/RealMap";
 import { MapView } from "../maps/MapView";
+import { useDeviceHeading } from "../hooks/useDeviceHeading";
 import { CLIENT_REASONS } from "../lib.local/mappers";
 import type { Professional, ServiceRequest, JobStatus, Message } from "../types.local";
 
@@ -25,6 +26,7 @@ export function ClientTracking({ pro, request, jobStatus, messages, clientLocati
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState("");
   const [liveProLocation, setLiveProLocation] = useState<GeoPoint | null>(pro.location ?? null);
+  const heading = useDeviceHeading(!!clientLocation);
   const ownCancelRef = useRef(false);
   const chatRef = useRef<HTMLDivElement>(null);
   useEffect(() => { chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: "smooth" }); }, [messages]);
@@ -91,6 +93,7 @@ export function ClientTracking({ pro, request, jobStatus, messages, clientLocati
                   ...(clientLocation ? [{ id: "yo", lat: clientLocation.lat, lng: clientLocation.lng, label: "Tú", color: LIME, labelColor: NAVY }] : []),
                   ...(liveProLocation ? [{ id: pro.id, lat: liveProLocation.lat, lng: liveProLocation.lng, label: pro.initials, color: pro.color }] : []),
                 ]}
+                heading={heading}
                 fallback={<MapView animate jobStatus={jobStatus} selectedProId="1" />}
               />
             </Card>

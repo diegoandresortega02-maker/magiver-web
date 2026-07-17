@@ -3,8 +3,40 @@ import { NAVY } from "../ui/primitives";
 import { loadGoogleMaps, getMapsApiKey, MINIMAL_MAP_STYLE } from "./googleMaps";
 import { MapView, type MapMarker } from "./MapView";
 
-export function RealMap({ markers, zoom = 14, onMarkerDragEnd, onMapClick }: {
-  markers: MapMarker[]; zoom?: number;
+// "yo" es el id que usan todas las pantallas para el marcador de la propia
+// posición del usuario (ver ProJobFlow.tsx / ClientTracking.tsx /
+// ClientJobFlow.tsx) — ese marcador se dibuja distinto (estilo "punto
+// azul" de Google Maps) al resto, que son pines de la otra parte/dirección.
+const SELF_MARKER_ID = "yo";
+
+// Pin normal: anillo de color (identidad) + placa blanca interior con las
+// iniciales en un color que siempre contrasta bien, sin depender de qué
+// tan clara u oscura sea la variante de color del marcador.
+function pinIconUrl(color: string, label: string, labelColor: string): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+    <circle cx="20" cy="20" r="16" fill="${color}" stroke="#fff" stroke-width="3"/>
+    <circle cx="20" cy="20" r="9.5" fill="#fff"/>
+    <text x="20" y="21" text-anchor="middle" dominant-baseline="central" font-family="Arial, sans-serif" font-size="10" font-weight="700" fill="${labelColor}">${label}</text>
+  </svg>`;
+  return "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg);
+}
+
+// Marcador de "mi posición": un punto sólido con anillo blanco, más un
+// cono de dirección semitransparente que rota según hacia dónde apunta el
+// teléfono (misma idea que el "punto azul" de Google Maps/Uber/Yango).
+function selfIconUrl(color: string, heading: number | null): string {
+  const cone = heading != null
+    ? `<path d="M20 2 L29 18 L20 13 L11 18 Z" fill="${color}" opacity="0.35" transform="rotate(${heading} 20 20)"/>`
+    : "";
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+    ${cone}
+    <circle cx="20" cy="20" r="8" fill="${color}" stroke="#fff" stroke-width="3"/>
+  </svg>`;
+  return "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg);
+}
+
+export function RealMap({ markers, zoom = 14, heading, onMarkerDragEnd, onMapClick }: {
+  markers: MapMarker[]; zoom?: number; heading?: number | null;
   onMarkerDragEnd?: (id: string, lat: number, lng: number) => void;
   onMapClick?: (lat: number, lng: number) => void;
 }) {
@@ -16,6 +48,7 @@ export function RealMap({ markers, zoom = 14, onMarkerDragEnd, onMapClick }: {
   onMarkerDragEndRef.current = onMarkerDragEnd;
   const onMapClickRef = useRef(onMapClick);
   onMapClickRef.current = onMapClick;
+  const markerInstancesRef = useRef<Record<string, any>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -33,11 +66,15 @@ export function RealMap({ markers, zoom = 14, onMarkerDragEnd, onMapClick }: {
       disableDefaultUI: true, zoomControl: true, clickableIcons: false, styles: MINIMAL_MAP_STYLE,
     });
     const bounds = new g.maps.LatLngBounds();
+    const instances: Record<string, any> = {};
     markers.forEach(m => {
+      const color = m.color ?? NAVY;
+      const isSelf = m.id === SELF_MARKER_ID;
+      const iconUrl = isSelf ? selfIconUrl(color, heading ?? null) : pinIconUrl(color, m.label, m.labelColor ?? NAVY);
+      const size = isSelf ? 40 : 40;
       const marker = new g.maps.Marker({
         position: { lat: m.lat, lng: m.lng }, map, title: m.label, draggable: !!m.draggable,
-        label: { text: m.label, color: m.labelColor ?? "#fff", fontWeight: "700", fontSize: "11px" },
-        icon: { path: g.maps.SymbolPath.CIRCLE, scale: 16, fillColor: m.color ?? NAVY, fillOpacity: 1, strokeColor: "#fff", strokeWeight: 2 },
+        icon: { url: iconUrl, scaledSize: new g.maps.Size(size, size), anchor: new g.maps.Point(size / 2, size / 2) },
       });
       if (m.draggable) {
         marker.addListener("dragend", () => {
@@ -45,13 +82,27 @@ export function RealMap({ markers, zoom = 14, onMarkerDragEnd, onMapClick }: {
           onMarkerDragEndRef.current?.(m.id, pos.lat(), pos.lng());
         });
       }
+      instances[m.id] = marker;
       bounds.extend({ lat: m.lat, lng: m.lng });
     });
+    markerInstancesRef.current = instances;
     if (onMapClickRef.current) {
       map.addListener("click", (e: any) => onMapClickRef.current?.(e.latLng.lat(), e.latLng.lng()));
     }
     if (markers.length > 1) map.fitBounds(bounds, 48);
   }, [ready, markersKey, zoom]);
+
+  // El rumbo cambia mucho más seguido que la posición — actualiza solo el
+  // ícono del marcador propio en vez de recrear todo el mapa en cada lectura
+  // de la brújula.
+  useEffect(() => {
+    const g = (window as any).google;
+    const selfMarker = markerInstancesRef.current[SELF_MARKER_ID];
+    const selfData = markers.find(m => m.id === SELF_MARKER_ID);
+    if (!g || !selfMarker || !selfData) return;
+    const color = selfData.color ?? NAVY;
+    selfMarker.setIcon({ url: selfIconUrl(color, heading ?? null), scaledSize: new g.maps.Size(40, 40), anchor: new g.maps.Point(20, 20) });
+  }, [heading]);
 
   if (error) return <MapView />;
   return <div ref={ref} className="w-full rounded-2xl overflow-hidden" style={{ aspectRatio: "16/9", background: "#E8F5E9" }} />;
@@ -59,11 +110,11 @@ export function RealMap({ markers, zoom = 14, onMarkerDragEnd, onMapClick }: {
 
 // Usa el mapa real cuando hay una clave de Google Maps configurada y al
 // menos una coordenada real; si no, cae al mapa decorativo de siempre.
-export function LiveMap({ markers, fallback, zoom, onMarkerDragEnd, onMapClick }: {
-  markers: MapMarker[]; fallback?: React.ReactNode; zoom?: number;
+export function LiveMap({ markers, fallback, zoom, heading, onMarkerDragEnd, onMapClick }: {
+  markers: MapMarker[]; fallback?: React.ReactNode; zoom?: number; heading?: number | null;
   onMarkerDragEnd?: (id: string, lat: number, lng: number) => void;
   onMapClick?: (lat: number, lng: number) => void;
 }) {
   if (!getMapsApiKey() || markers.length === 0) return <>{fallback ?? <MapView />}</>;
-  return <RealMap markers={markers} zoom={zoom} onMarkerDragEnd={onMarkerDragEnd} onMapClick={onMapClick} />;
+  return <RealMap markers={markers} zoom={zoom} heading={heading} onMarkerDragEnd={onMarkerDragEnd} onMapClick={onMapClick} />;
 }
