@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import isotipo from "@/imports/isotipo_azul_verde_para_redes_-_verde_oficial.png";
+import isotipo from "@/imports/logo/isotipo-navy.png";
 import { config } from "@/lib/config";
 import {
   ChevronLeft, Eye, EyeOff, Clock, BadgeCheck, XCircle, Loader2, AlertCircle, Star, Bell, X, RefreshCw,
