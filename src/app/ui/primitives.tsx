@@ -2,9 +2,10 @@ import { useState, useEffect } from "react";
 import isotipo from "@/imports/isotipo_azul_verde_para_redes_-_verde_oficial.png";
 import { config } from "@/lib/config";
 import {
-  ChevronLeft, Eye, EyeOff, Clock, BadgeCheck, XCircle, Loader2, AlertCircle, Star, Bell, X,
+  ChevronLeft, Eye, EyeOff, Clock, BadgeCheck, XCircle, Loader2, AlertCircle, Star, Bell, X, RefreshCw,
 } from "lucide-react";
 import type { JobStatus, Professional } from "../types.local";
+import { usePullToRefresh } from "../hooks/usePullToRefresh";
 
 // ─── Design tokens ─────────────────────────────────────────────────────────
 export const NAVY = "#0F172A";
@@ -179,10 +180,24 @@ export function AppHeader({ title, onBack, right, dark = true }: {
   );
 }
 
+// Envuelve casi todas las pantallas de la app — acá vive el gesto de
+// "deslizar hacia abajo para actualizar" (más de 1/4 de la altura de la
+// pantalla desde arriba dispara un reload real), así queda disponible en
+// toda la app de una sola vez sin tener que tocar cada pantalla.
 export function ScreenWrap({ children, bg = LIGHT }: { children: React.ReactNode; bg?: string }) {
+  const { containerRef, pullDistance, refreshing } = usePullToRefresh<HTMLDivElement>();
+  const threshold = typeof window !== "undefined" ? window.innerHeight * 0.25 : 200;
+  const progress = Math.min(pullDistance / threshold, 1);
   return (
-    <div className="fixed inset-0 z-50 flex flex-col overflow-hidden" style={{ background: bg, fontFamily: "Inter, sans-serif" }}>
-      {children}
+    <div ref={containerRef} className="fixed inset-0 z-50 flex flex-col overflow-hidden" style={{ background: bg, fontFamily: "Inter, sans-serif" }}>
+      {(pullDistance > 0 || refreshing) && (
+        <div className="flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ height: pullDistance }}>
+          <RefreshCw className={refreshing ? "w-5 h-5 animate-spin" : "w-5 h-5"} style={{ color: LIME, transform: refreshing ? undefined : `rotate(${progress * 360}deg)`, opacity: 0.4 + progress * 0.6 }} />
+        </div>
+      )}
+      <div className="flex-1 flex flex-col overflow-hidden" style={{ transform: pullDistance ? `translateY(${pullDistance}px)` : undefined }}>
+        {children}
+      </div>
     </div>
   );
 }
