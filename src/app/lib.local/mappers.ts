@@ -3,7 +3,7 @@ import type { ProUser as ApiProUser, ServiceRequest as ApiServiceRequest, GeoPoi
 import {
   Zap, Droplets, Wind, Wrench, Paintbrush, Car,
   Bike, Sparkles, Flame, Leaf, Bug, Calculator, FlaskConical, Atom, Languages,
-  CarFront, PawPrint, KeyRound, WashingMachine, Home, Building2, Briefcase, Building,
+  CarFront, PawPrint, KeyRound, WashingMachine, Home, Building2, Briefcase, Building, Waves,
 } from "lucide-react";
 import type { Professional, JobStatus, ServiceRequest } from "../types.local";
 
@@ -35,6 +35,7 @@ export const SERVICES = [
   { id: "paseador_mascotas", label: "Paseador de mascotas", icon: PawPrint, color: "#B45309" },
   { id: "cerrajero", label: "Cerrajero", icon: KeyRound, color: "#475569" },
   { id: "tecnico_lavadoras", label: "Técnico de lavadoras", icon: WashingMachine, color: "#0369A1" },
+  { id: "mantenimiento_piscinas", label: "Mantenimiento de piscinas", icon: Waves, color: "#14B8A6" },
 ];
 
 // Convierte el id técnico guardado en la base (ej. "aire_acondicionado")

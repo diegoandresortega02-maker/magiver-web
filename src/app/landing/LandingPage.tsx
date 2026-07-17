@@ -21,6 +21,7 @@ import catChoferDesignado from "@/assets/photos/cat-chofer-designado.jpg";
 import catPaseadorMascotas from "@/assets/photos/cat-paseador-mascotas.jpg";
 import catCerrajero from "@/assets/photos/cat-cerrajero.jpg";
 import catTecnicoLavadoras from "@/assets/photos/cat-tecnico-lavadoras.jpg";
+import catMantenimientoPiscinas from "@/assets/photos/cat-mantenimiento-piscinas.jpg";
 import {
   MapPin, Shield, Star, ChevronDown, Menu, X,
   Zap, Droplets, Wind, Wrench, Paintbrush,
@@ -29,7 +30,7 @@ import {
   ArrowRight, Briefcase, Car,
   DollarSign,
   Bike, Sparkles, Flame, Leaf, Bug, Calculator, FlaskConical, Atom, Languages,
-  CarFront, PawPrint, KeyRound, WashingMachine,
+  CarFront, PawPrint, KeyRound, WashingMachine, Waves,
 } from "lucide-react";
 import { NAVY, LIME, LIGHT, LogoIcon, LimeBtn, DevStatus } from "../ui/primitives";
 
@@ -206,6 +207,7 @@ function LandingServices({ onClient }: { onClient: () => void }) {
     { icon: PawPrint, title: "Paseador de mascotas", desc: "Paseos diarios para perros y gatos.", photo: catPaseadorMascotas },
     { icon: KeyRound, title: "Cerrajero", desc: "Apertura de puertas, cambio de cerraduras y copias de llaves.", photo: catCerrajero },
     { icon: WashingMachine, title: "Técnico de lavadoras", desc: "Reparación y mantenimiento de lavadoras.", photo: catTecnicoLavadoras },
+    { icon: Waves, title: "Mantenimiento de piscinas", desc: "Limpieza, químicos y mantenimiento de piscinas.", photo: catMantenimientoPiscinas },
   ];
   return (
     <section id="servicios" className="py-24" style={{ background: LIGHT }}>
