@@ -11,6 +11,7 @@ export function usePullToRefresh<T extends HTMLElement>() {
   const containerRef = useRef<T>(null);
   const [pullDistance, setPullDistance] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const startYRef = useRef<number | null>(null);
   const trackingRef = useRef(false);
 
@@ -37,22 +38,29 @@ export function usePullToRefresh<T extends HTMLElement>() {
       if (!isAtTop(e.target)) { trackingRef.current = false; return; }
       startYRef.current = e.touches[0].clientY;
       trackingRef.current = true;
+      setDragging(true);
     };
 
     const onTouchMove = (e: TouchEvent) => {
       if (!trackingRef.current || startYRef.current == null) return;
-      const delta = e.touches[0].clientY - startYRef.current;
-      if (delta <= 0) { setPullDistance(0); return; }
-      // Un poco de resistencia progresiva, como en las apps nativas — el
-      // dedo se mueve más de lo que el indicador visualmente baja.
+      const rawDelta = e.touches[0].clientY - startYRef.current;
+      if (rawDelta <= 0) { setPullDistance(0); return; }
       e.preventDefault();
-      setPullDistance(Math.min(delta * 0.5, maxPull()));
+      // Resistencia progresiva tipo "rubber band" (como en iOS/apps nativas):
+      // al principio el indicador sigue al dedo casi 1 a 1, pero cuanto más
+      // se estira, más cuesta seguir bajando — se siente elástico y suave
+      // en vez de moverse a la misma velocidad brusca del dedo todo el
+      // tiempo, y nunca se pasa de maxPull.
+      const max = maxPull();
+      const damped = max * (1 - Math.exp(-rawDelta / (max * 0.9)));
+      setPullDistance(damped);
     };
 
     const onTouchEnd = () => {
       if (!trackingRef.current) return;
       trackingRef.current = false;
       startYRef.current = null;
+      setDragging(false);
       setPullDistance(current => {
         if (current >= threshold()) {
           setRefreshing(true);
@@ -78,5 +86,5 @@ export function usePullToRefresh<T extends HTMLElement>() {
     };
   }, [refreshing]);
 
-  return { containerRef, pullDistance, refreshing };
+  return { containerRef, pullDistance, refreshing, dragging };
 }

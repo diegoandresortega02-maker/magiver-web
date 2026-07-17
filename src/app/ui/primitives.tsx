@@ -185,17 +185,21 @@ export function AppHeader({ title, onBack, right, dark = true }: {
 // pantalla desde arriba dispara un reload real), así queda disponible en
 // toda la app de una sola vez sin tener que tocar cada pantalla.
 export function ScreenWrap({ children, bg = LIGHT }: { children: React.ReactNode; bg?: string }) {
-  const { containerRef, pullDistance, refreshing } = usePullToRefresh<HTMLDivElement>();
+  const { containerRef, pullDistance, refreshing, dragging } = usePullToRefresh<HTMLDivElement>();
   const threshold = typeof window !== "undefined" ? window.innerHeight * 0.25 : 200;
   const progress = Math.min(pullDistance / threshold, 1);
+  // Mientras se arrastra, sigue al dedo sin transición (respuesta 1 a 1);
+  // al soltar (se cancela o dispara el refresh), anima suave en vez de
+  // saltar de golpe — eso es lo que se sentía "tosco" antes.
+  const settleTransition = dragging ? "none" : "height 260ms cubic-bezier(0.22, 1, 0.36, 1), opacity 260ms ease-out";
   return (
     <div ref={containerRef} className="fixed inset-0 z-50 flex flex-col overflow-hidden" style={{ background: bg, fontFamily: "Inter, sans-serif" }}>
       {(pullDistance > 0 || refreshing) && (
-        <div className="flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ height: pullDistance }}>
-          <RefreshCw className={refreshing ? "w-5 h-5 animate-spin" : "w-5 h-5"} style={{ color: LIME, transform: refreshing ? undefined : `rotate(${progress * 360}deg)`, opacity: 0.4 + progress * 0.6 }} />
+        <div className="flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ height: pullDistance, transition: settleTransition }}>
+          <RefreshCw className={refreshing ? "w-5 h-5 animate-spin" : "w-5 h-5"} style={{ color: LIME, transform: refreshing ? undefined : `rotate(${progress * 360}deg)`, opacity: 0.4 + progress * 0.6, transition: dragging ? "none" : "transform 260ms cubic-bezier(0.22, 1, 0.36, 1)" }} />
         </div>
       )}
-      <div className="flex-1 flex flex-col overflow-hidden" style={{ transform: pullDistance ? `translateY(${pullDistance}px)` : undefined }}>
+      <div className="flex-1 flex flex-col overflow-hidden" style={{ transform: pullDistance ? `translateY(${pullDistance}px)` : undefined, transition: settleTransition.replace("height", "transform") }}>
         {children}
       </div>
     </div>
