@@ -589,6 +589,29 @@ export async function submitReview(data: {
   return { id: review.id, requestId: review.request_id, fromClientId: review.from_client_id, toProfessionalId: review.to_professional_id, rating: review.rating, comment: review.comment ?? undefined, createdAt: review.created_at };
 }
 
+// Reseñas públicas de un profesional (nombre del cliente + estrellas +
+// comentario) — para que el cliente pueda ver el perfil completo del
+// profesional que le aceptó la solicitud, no solo el promedio numérico.
+// `reviews` ya es de lectura abierta (reviews_select_all), pero el nombre
+// del cliente autor viene de la tabla `clients`, cuya RLS solo deja leer tu
+// propia fila o la de un cliente con quien tenés una solicitud en común —
+// no alcanza para ver el nombre de OTROS clientes que reseñaron al mismo
+// profesional. En vez de abrir la RLS de `clients` (expondría toda la fila,
+// no solo el nombre), se usa un RPC SECURITY DEFINER que solo devuelve las
+// columnas necesarias.
+export interface ProfessionalReview {
+  id: string; rating: number; comment?: string; clientName?: string; createdAt: string;
+}
+export async function getProfessionalReviews(professionalId: string): Promise<ProfessionalReview[]> {
+  if (config.MOCK_MODE) return [];
+  const { data, error } = await supabase.rpc("get_professional_reviews", { p_professional_id: professionalId });
+  if (error) throw { code: "db_error", message: error.message };
+  return (data ?? []).map((row: any) => ({
+    id: row.id, rating: row.rating, comment: row.comment ?? undefined,
+    clientName: row.client_name ?? undefined, createdAt: row.created_at,
+  }));
+}
+
 // El profesional califica al cliente (dirección inversa a submitReview) —
 // mismo patrón, tabla separada (client_ratings) porque reviews tiene la
 // forma fija cliente→profesional.

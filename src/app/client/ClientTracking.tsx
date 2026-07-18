@@ -13,6 +13,8 @@ import { LiveMap } from "../maps/RealMap";
 import { MapView } from "../maps/MapView";
 import { useDeviceHeading } from "../hooks/useDeviceHeading";
 import { CLIENT_REASONS } from "../lib.local/mappers";
+import { ProfessionalProfileModal } from "./ProfessionalProfileModal";
+import { ChevronRight } from "lucide-react";
 import type { Professional, ServiceRequest, JobStatus, Message } from "../types.local";
 
 // ─── CLIENT TRACKING ──────────────────────────────────────────────────────────
@@ -23,6 +25,7 @@ export function ClientTracking({ pro, request, jobStatus, messages, clientLocati
 }) {
   const [tab, setTab] = useState<"track" | "chat">("track");
   const [msg, setMsg] = useState("");
+  const [showProfile, setShowProfile] = useState(false);
   const [showCancel, setShowCancel] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState("");
@@ -94,7 +97,11 @@ export function ClientTracking({ pro, request, jobStatus, messages, clientLocati
         {tab === "track" ? (
           <div className="flex-1 overflow-y-auto p-4">
             <Card className="mb-4">
-              <div className="flex items-center gap-3 mb-4"><ProAvatar pro={pro} /><div className="flex-1"><div className="flex items-center gap-1.5"><p className="font-bold" style={{ color: NAVY }}>{pro.name}</p><BadgeCheck className="w-4 h-4 text-blue-500" /></div><p className="text-xs text-slate-500">{pro.specialty}</p></div><div className="flex flex-col items-end gap-1"><StatusBadge status={jobStatus} />{etaMinutes != null && <p className="text-xs font-bold" style={{ color: NAVY }}>Llega en ~{etaMinutes} min</p>}</div></div>
+              <button onClick={() => setShowProfile(true)} className="w-full flex items-center gap-3 mb-4 text-left">
+                <ProAvatar pro={pro} />
+                <div className="flex-1"><div className="flex items-center gap-1.5"><p className="font-bold" style={{ color: NAVY }}>{pro.name}</p><BadgeCheck className="w-4 h-4 text-blue-500" /><ChevronRight className="w-3.5 h-3.5 text-slate-300" /></div><p className="text-xs text-slate-500">{pro.specialty} · Ver perfil</p></div>
+                <div className="flex flex-col items-end gap-1"><StatusBadge status={jobStatus} />{etaMinutes != null && <p className="text-xs font-bold" style={{ color: NAVY }}>Llega en ~{etaMinutes} min</p>}</div>
+              </button>
               <LiveMap
                 markers={[
                   ...(clientLocation ? [{ id: "yo", lat: clientLocation.lat, lng: clientLocation.lng, label: "Tú", color: LIME, labelColor: NAVY }] : []),
@@ -157,6 +164,7 @@ export function ClientTracking({ pro, request, jobStatus, messages, clientLocati
           onClose={() => setShowCancel(false)}
         />
       )}
+      {showProfile && <ProfessionalProfileModal pro={pro} onClose={() => setShowProfile(false)} />}
     </ScreenWrap>
   );
 }
