@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { config } from "@/lib/config";
 import { updateJobStatus, submitReview, cancelActiveJob, subscribeToProfessionalLocation, subscribeToJobChanges } from "@/lib/api";
 import type { ClientReasonCode } from "@/lib/api";
+import { distanceKm, estimateEtaMinutes } from "@/lib/geo";
 import type { GeoPoint, JobStatus as ApiJobStatus } from "@/lib/types";
 import {
   MessageSquare, CheckCircle, Car, MapPin, Award, Star, Send,
@@ -71,6 +72,12 @@ export function ClientTracking({ pro, request, jobStatus, messages, clientLocati
   ];
   const order: JobStatus[] = ["matched", "en_camino", "en_sitio", "completado"];
   const currentIdx = order.indexOf(jobStatus);
+  // ETA en vivo: se recalcula cada vez que llega una posición nueva del
+  // profesional (no es una estimación fija de cuando aceptó la solicitud).
+  const etaMinutes = useMemo(() => {
+    if (jobStatus !== "en_camino" || !clientLocation || !liveProLocation) return null;
+    return estimateEtaMinutes(distanceKm(liveProLocation, clientLocation));
+  }, [jobStatus, clientLocation, liveProLocation]);
   return (
     <ScreenWrap>
       <AppHeader title={pro.name} onBack={onBack}
@@ -87,7 +94,7 @@ export function ClientTracking({ pro, request, jobStatus, messages, clientLocati
         {tab === "track" ? (
           <div className="flex-1 overflow-y-auto p-4">
             <Card className="mb-4">
-              <div className="flex items-center gap-3 mb-4"><ProAvatar pro={pro} /><div className="flex-1"><div className="flex items-center gap-1.5"><p className="font-bold" style={{ color: NAVY }}>{pro.name}</p><BadgeCheck className="w-4 h-4 text-blue-500" /></div><p className="text-xs text-slate-500">{pro.specialty}</p></div><StatusBadge status={jobStatus} /></div>
+              <div className="flex items-center gap-3 mb-4"><ProAvatar pro={pro} /><div className="flex-1"><div className="flex items-center gap-1.5"><p className="font-bold" style={{ color: NAVY }}>{pro.name}</p><BadgeCheck className="w-4 h-4 text-blue-500" /></div><p className="text-xs text-slate-500">{pro.specialty}</p></div><div className="flex flex-col items-end gap-1"><StatusBadge status={jobStatus} />{etaMinutes != null && <p className="text-xs font-bold" style={{ color: NAVY }}>Llega en ~{etaMinutes} min</p>}</div></div>
               <LiveMap
                 markers={[
                   ...(clientLocation ? [{ id: "yo", lat: clientLocation.lat, lng: clientLocation.lng, label: "Tú", color: LIME, labelColor: NAVY }] : []),

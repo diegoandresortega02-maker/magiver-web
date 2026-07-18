@@ -17,17 +17,29 @@ export function useGeolocation() {
 }
 
 // Ubicación GPS real en vivo mientras `active` es true (para el profesional
-// mientras está Online).
+// mientras está Online). Expone también el error y la precisión (metros) —
+// antes el error se descartaba en silencio, así que si el permiso fallaba o
+// el navegador solo lograba una ubicación imprecisa (red/celda en vez de GPS
+// real), el profesional nunca se enteraba y el cliente veía en el mapa la
+// última posición guardada, que podía ser vieja o estar lejos de la real.
 export function useWatchPosition(active: boolean) {
   const [position, setPosition] = useState<GeoPoint | null>(null);
+  const [accuracy, setAccuracy] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    if (!active || !navigator.geolocation) return;
+    if (!active) return;
+    if (!navigator.geolocation) { setError("Tu navegador no soporta geolocalización."); return; }
+    setError(null);
     const watchId = navigator.geolocation.watchPosition(
-      pos => setPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => {},
+      pos => {
+        setPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setAccuracy(pos.coords.accuracy);
+        setError(null);
+      },
+      err => setError(err.message),
       { enableHighAccuracy: true },
     );
     return () => navigator.geolocation.clearWatch(watchId);
   }, [active]);
-  return position;
+  return { position, accuracy, error };
 }

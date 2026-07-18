@@ -78,11 +78,20 @@ export function ProfesionalPortal() {
   // professionals.location_lat/lng para que la distancia que ve el cliente
   // sea real (ver proUserToProfessional/haversineKm).
   const [available, setAvailable] = useState(true);
-  const proPosition = useWatchPosition(available);
+  const { position: proPosition, accuracy: proAccuracy, error: proLocationError } = useWatchPosition(available);
   useEffect(() => {
     if (config.MOCK_MODE || !proUser?.id) return;
     updateMyPresence({ isOnline: available, location: proPosition ?? undefined }).catch(() => {});
   }, [available, proPosition, proUser?.id]);
+  // Antes el error de geolocalización se descartaba en silencio: si el
+  // permiso fallaba o el modo de ubicación del teléfono solo daba una
+  // posición aproximada por red/celda (no GPS real), el profesional nunca
+  // se enteraba y el cliente veía en el mapa una posición vieja o imprecisa
+  // sin ninguna pista de por qué. Ahora se lo avisamos directamente.
+  const locationWarning = !config.MOCK_MODE && available
+    ? (proLocationError ? "No pudimos obtener tu ubicación GPS — revisa el permiso de ubicación de la app."
+      : (proAccuracy != null && proAccuracy > 150 ? `Ubicación imprecisa (±${Math.round(proAccuracy)}m) — activa "Alta precisión" en Ubicación del teléfono.` : null))
+    : null;
   // "available" arranca en true por defecto (ver arriba), así que un
   // profesional que abre la app sin tocar el interruptor nunca disparaba el
   // registro de push (antes solo pasaba dentro de handleToggleAvailable).
@@ -230,6 +239,12 @@ export function ProfesionalPortal() {
       )}
       {showCancelledModal && (
         <CancelledJobModal message={cancelNotice} onAccept={() => setShowCancelledModal(false)} />
+      )}
+      {locationWarning && !["auth", "register", "documents", "docview", "verify"].includes(screen) && (
+        <div className="fixed top-0 inset-x-0 z-[90] px-4 py-2 text-xs font-semibold text-center"
+          style={{ background: "#F59E0B", color: "#1F2937" }}>
+          {locationWarning}
+        </div>
       )}
     </>
   );
