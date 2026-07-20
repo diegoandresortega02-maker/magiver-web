@@ -1,45 +1,68 @@
 import { useState, useEffect } from "react";
+import { Geolocation } from "@capacitor/geolocation";
 import type { GeoPoint } from "@/lib/types";
 
-// Ubicación GPS real del navegador, una sola vez (para el cliente al pedir un servicio).
+// Usamos @capacitor/geolocation en vez de navigator.geolocation directo.
+// En la app nativa Android esto pide el permiso de ubicación del sistema
+// operativo de forma explícita y lee el GPS real (FusedLocationProvider) en
+// vez de depender del puente de geolocalización del WebView — en varios
+// teléfonos/versiones de Android ese puente no dispara el diálogo de
+// permiso o entrega una posición imprecisa por red en vez de GPS real, que
+// es justo lo que causaba que el pin apareciera en un lugar genérico. En la
+// web este mismo plugin usa navigator.geolocation por debajo, así que el
+// comportamiento en el navegador no cambia.
+
+// Ubicación GPS real, una sola vez (para el cliente al pedir un servicio).
 export function useGeolocation() {
   const [position, setPosition] = useState<GeoPoint | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    if (!navigator.geolocation) { setError("Tu navegador no soporta geolocalización."); return; }
-    navigator.geolocation.getCurrentPosition(
-      pos => setPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      err => setError(err.message),
-      { enableHighAccuracy: true, timeout: 10000 },
-    );
+    let cancelled = false;
+    (async () => {
+      try {
+        await Geolocation.requestPermissions().catch(() => {});
+        const pos = await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 15000 });
+        if (!cancelled) setPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      } catch (err: any) {
+        if (!cancelled) setError(err?.message ?? "No se pudo obtener tu ubicación.");
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
   return { position, error };
 }
 
 // Ubicación GPS real en vivo mientras `active` es true (para el profesional
-// mientras está Online). Expone también el error y la precisión (metros) —
-// antes el error se descartaba en silencio, así que si el permiso fallaba o
-// el navegador solo lograba una ubicación imprecisa (red/celda en vez de GPS
-// real), el profesional nunca se enteraba y el cliente veía en el mapa la
-// última posición guardada, que podía ser vieja o estar lejos de la real.
+// mientras está Online). Expone también el error y la precisión (metros).
 export function useWatchPosition(active: boolean) {
   const [position, setPosition] = useState<GeoPoint | null>(null);
   const [accuracy, setAccuracy] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (!active) return;
-    if (!navigator.geolocation) { setError("Tu navegador no soporta geolocalización."); return; }
+    let watchId: string | null = null;
+    let cancelled = false;
     setError(null);
-    const watchId = navigator.geolocation.watchPosition(
-      pos => {
-        setPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setAccuracy(pos.coords.accuracy);
-        setError(null);
-      },
-      err => setError(err.message),
-      { enableHighAccuracy: true },
-    );
-    return () => navigator.geolocation.clearWatch(watchId);
+    (async () => {
+      try {
+        await Geolocation.requestPermissions().catch(() => {});
+        watchId = await Geolocation.watchPosition({ enableHighAccuracy: true }, (pos, err) => {
+          if (cancelled) return;
+          if (err) { setError(err.message ?? "No se pudo obtener tu ubicación."); return; }
+          if (pos) {
+            setPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+            setAccuracy(pos.coords.accuracy);
+            setError(null);
+          }
+        });
+      } catch (err: any) {
+        if (!cancelled) setError(err?.message ?? "No se pudo obtener tu ubicación.");
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (watchId) Geolocation.clearWatch({ id: watchId }).catch(() => {});
+    };
   }, [active]);
   return { position, accuracy, error };
 }
