@@ -280,6 +280,12 @@ export function ClientRequest({ service, clientLocation, onSubmit, onBack }: { s
           </div>
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: NAVY }}>Ubicación del servicio</label>
+            {!clientLocation && (
+              <div className="mb-3 p-3 rounded-xl border flex items-start gap-2" style={{ background: "#FFFBEB", borderColor: "#FDE68A" }}>
+                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: "#B45309" }} />
+                <p className="text-xs" style={{ color: "#92400E" }}>No pudimos detectar tu ubicación real (revisa el permiso de ubicación). El pin de abajo está en un punto genérico de Santa Cruz — <strong>arrástralo hasta tu dirección real</strong> antes de enviar.</p>
+              </div>
+            )}
             {pinLocation && config.MAPS_API_KEY && (
               <div className="relative mb-3">
                 <RealMap
